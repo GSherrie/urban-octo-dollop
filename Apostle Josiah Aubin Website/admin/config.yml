@@ -1,0 +1,62 @@
+backend:
+  name: github
+  repo: GSherrie/urban-octo-dollop
+  branch: main
+
+media_folder: "uploads"
+public_folder: "/uploads"
+
+collections:
+  - name: "pages"
+    label: "Pages (Raw HTML)"
+    files:
+      - label: "Home"
+        name: "home"
+        file: "index.html"
+        format: "raw"
+        fields:
+          - { label: "Body HTML", name: "body", widget: "code", default_language: "html" }
+
+      - label: "Sermons"
+        name: "sermons"
+        file: "sermons.html"
+        format: "raw"
+        fields:
+          - { label: "Featured Image", name: "thumbnail", widget: "image" }
+          - { label: "Body HTML", name: "body", widget: "code", default_language: "html" }
+
+      - label: "Teachings"
+        name: "teachings"
+        file: "teachings.html"
+        format: "raw"
+        fields:
+          - { label: "Body HTML", name: "body", widget: "code", default_language: "html" }
+
+      - label: "Books"
+        name: "books"
+        file: "books.html"
+        format: "raw"
+        fields:
+          - { label: "Book Cover", name: "cover", widget: "image" }
+          - { label: "Body HTML", name: "body", widget: "code", default_language: "html" }
+
+      - label: "Testimonies"
+        name: "testimonies"
+        file: "testimonies.html"
+        format: "raw"
+        fields:
+          - { label: "Body HTML", name: "body", widget: "code", default_language: "html" }
+
+      - label: "Live Services"
+        name: "live"
+        file: "live.html"
+        format: "raw"
+        fields:
+          - { label: "Body HTML", name: "body", widget: "code", default_language: "html" }
+
+      - label: "Most Watched"
+        name: "most_watched"
+        file: "most-watched.html"
+        format: "raw"
+        fields:
+          - { label: "Body HTML", name: "body", widget: "code", default_language: "html" }
