@@ -19,7 +19,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 <div id="splash" aria-hidden="true">
@@ -36,14 +36,14 @@
 <div id="app" class="shell-loading"></div>
 <div id="modal-root"></div>
 <div id="toast-root"></div>
-<script src="js/store.js?v=11"></script>
-<script src="js/ui.js?v=11"></script>
-<script src="js/views-auth.js?v=11"></script>
-<script src="js/views-main.js?v=11"></script>
-<script src="js/views-editor.js?v=11"></script>
-<script src="js/views-ops.js?v=11"></script>
-<script src="js/views-biz.js?v=11"></script>
-<script src="js/views-account.js?v=11"></script>
+<script src="js/store.js?v=12"></script>
+<script src="js/ui.js?v=12"></script>
+<script src="js/views-auth.js?v=12"></script>
+<script src="js/views-main.js?v=12"></script>
+<script src="js/views-editor.js?v=12"></script>
+<script src="js/views-ops.js?v=12"></script>
+<script src="js/views-biz.js?v=12"></script>
+<script src="js/views-account.js?v=12"></script>
 <script>
   window.addEventListener('DOMContentLoaded', function () {
     Store.boot();
@@ -51,7 +51,22 @@
     UI.dismissSplash();
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').catch(function () {});
+        /* Registered under a versioned URL (?v=N) with updateViaCache:'none' so a phone/PWA
+           always checks for the newest build instead of trusting its HTTP cache. A new worker
+           skipWaiting()s on install; the one-time controllerchange reload then swaps the running
+           page onto fresh assets, so an installed app never keeps serving an old build. */
+        navigator.serviceWorker.register('sw.js?v=12', { updateViaCache: 'none' }).then(function (reg) {
+          reg.update().catch(function () {});
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') reg.update().catch(function () {});
+          });
+        }).catch(function () {});
+        var swapped = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (swapped) return;
+          swapped = true;
+          location.reload();
+        });
       });
     }
   });

@@ -5,6 +5,18 @@
   const cur = () => S.db.settings.currency || 'GHS';
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const VERSION = '2.4.1';
+  /* Build tag = the deployed asset version (`?v=N` in index.html). Shown in About so you can tell
+     at a glance whether this device is running the newest build, next to a one-tap force refresh. */
+  const BUILD = (function () {
+    try {
+      const meta = document.querySelector('meta[name="sherpay-build"]');
+      if (meta && meta.content) return meta.content;
+      const tag = document.querySelector('script[src*="store.js"]');
+      const m = tag && tag.src.match(/[?&]v=(\d+)/);
+      if (m) return 'v' + m[1];
+    } catch (e) {}
+    return 'offline';
+  })();
 
   /* settings sub-objects are lazy — older saved dbs may not have them */
   function st() {
@@ -229,7 +241,8 @@
       title: 'About',
       html:
         '<div class="card card-b settings-list">' +
-          row('more', 'App version', 'SherPay for Web &amp; Mobile', '<span class="chip">v' + VERSION + '</span>') +
+          row('more', 'App version', 'SherPay for Web &amp; Mobile · build ' + esc(BUILD), '<span class="chip">v' + VERSION + '</span>') +
+          row('sync', 'Check for updates', 'Force this device onto the newest build (your data stays)', '<button class="btn sm primary" data-action="refresh-app">Refresh</button>') +
           row('file', 'Terms of Service', 'The rules for using SherPay', '<button class="btn sm ghost" data-action="tos">View</button>') +
           row('lock', 'Privacy Policy', 'How we collect &amp; protect your data', '<button class="btn sm ghost" data-action="privacy">View</button>') +
           row('card', 'Licenses', 'Open-source software we build on', '<button class="btn sm ghost" data-action="licenses">View</button>') +
@@ -435,6 +448,26 @@
       })
     });
   }
+  /* ---------------- force this device onto the newest build ---------------- */
+  /* Used by the "Check for updates" row: drop the service worker + its caches, then reload, so an
+     installed PWA re-downloads the latest index.html/CSS/JS instead of its cached shell.
+     localStorage (invoices, clients, settings) is deliberately untouched. */
+  function forceRefreshApp() {
+    UI.toast('Checking for the latest build…', 'blue', 'sync');
+    const reload = function () { try { location.reload(); } catch (e) {} };
+    const dropWorkers = function () {
+      if (!('serviceWorker' in navigator)) return Promise.resolve();
+      return navigator.serviceWorker.getRegistrations()
+        .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+        .catch(() => {});
+    };
+    const dropCaches = function () {
+      if (!('caches' in window)) return Promise.resolve();
+      return caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).catch(() => {});
+    };
+    dropWorkers().then(dropCaches).then(reload).catch(reload);
+  }
+
   /* ================= ACCOUNT VIEW ================= */
   UI.VIEWS.account = function () {
     const user = S.Auth.current();
@@ -506,6 +539,7 @@
         'faq': () => UI.toast('FAQs — sherpay.io/faq', 'blue', 'search'),
         'report': openReportModal,
         'feedback': openFeedbackModal,
+        'refresh-app': forceRefreshApp,
         'tos': legalModal,
         'privacy': () => legalModal('privacy'),
         'licenses': () => legalModal('licenses'),

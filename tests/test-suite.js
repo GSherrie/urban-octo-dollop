@@ -229,6 +229,8 @@ const section = (n) => console.log('— ' + n);
   check('data & privacy section', $('#view').textContent.includes('Data'));
   check('support section', $('#view').textContent.includes('Support'));
   check('about section shows version', $('#view').textContent.includes('v' + '2.4.1'));
+  check('about section shows build tag', /\bbuild (?:v\d+|offline)/.test($('#view').textContent));
+  check('check-for-updates action available', !!$('[data-action="refresh-app"]'));
   check('actions section (logout)', $('#view').textContent.includes('Log out'));
   check('back-to-dashboard button', !!$('[data-action="account-home"]'));
   // theme chip toggles

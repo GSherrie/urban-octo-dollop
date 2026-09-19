@@ -16,13 +16,13 @@ Regression tests: `node smoke.js` (dependency-free route render check) and `node
 
 ## Quality assurance
 
-`node test-suite.js` (jsdom, needs `npm i jsdom`) — 50-assertion functional sweep:
+`node test-suite.js` (jsdom, needs `npm i jsdom`) — 88-assertion functional sweep:
 dashboard KPIs/charts, invoice filters & search, editor math (percent/flat discount & tax),
 sequential numbering, send → viewed → partial → paid → receipt chain, clients CRUD + auto-fill,
 expenses manual + OCR scan + category filter + delete, time tracking → invoice conversion,
 reports & CSV quoting, settings numbering/branding/recurring/reminders automations,
 store invariants (totals math, overdue computation, currency formatting), zero uncaught errors.
-Current status: **50/50 passing**.
+Current status: **88/88 passing**.
 
 Scrolling/interaction model: native document scroll; `touch-action: pan-x` on horizontal tables so
 vertical swipes never get trapped; JS touch-assist (vertical swipes that produce zero window

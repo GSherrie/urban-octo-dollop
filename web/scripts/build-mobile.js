@@ -5,6 +5,8 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 
 let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+// the asset version (?v=N) doubles as the build tag for this offline copy
+const build = 'v' + ((html.match(/\?v=(\d+)/) || [])[1] || '0');
 const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 const jsFiles = ['js/store.js', 'js/ui.js', 'js/views-auth.js', 'js/views-main.js', 'js/views-editor.js', 'js/views-ops.js', 'js/views-biz.js', 'js/views-account.js'];
 const js = jsFiles.map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n;\n');
@@ -28,6 +30,8 @@ html = html.replace(/<link rel="icon"[^>]*>\n/, '');
 html = html.replace(/<link rel="apple-touch-icon"[^>]*>\n/, '');
 // 4) embed the logo everywhere it is referenced
 html = html.split('assets/logo.png').join(LOGO);
+// 5) stamp the build tag (no script[src] left to read it from) so the offline file reports its build
+html = html.replace('<meta charset="UTF-8">', '<meta charset="UTF-8">\n<meta name="sherpay-build" content="' + build + '">');
 
 const out = path.join(root, '..', 'SherPay-mobile.html');
 fs.writeFileSync(out, html);

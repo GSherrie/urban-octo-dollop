@@ -9,7 +9,7 @@ Invoicing, receipts & payments app · branded with the SherPay logo · productio
 | `web/` | The web app source (dependency-free, no build step): `index.html`, `styles.css`, `js/` (store, ui, views), `assets/` (logo + PWA icons), `manifest.json`, `sw.js` (offline service worker), `scripts/` (builders), `README.md` (full feature/architecture docs) |
 | `native/` | Complete Capacitor 7 native project (iOS Xcode + Android Gradle, branded icons/splash, bundle id `com.sherpay.app`) with the web app synced into `www/`. See `native/README-TESTFLIGHT.md` and `native/README-HOSTING.md` |
 | `builds/` | Ready-to-use artifacts: `SherPay-mobile.html` (entire app in ONE offline file), `SherPay-web-dist.zip` (drag-&-drop deploy bundle for Netlify/Vercel/any host), `SherPay-iOS-Android-build.zip` (standalone native project) |
-| `tests/` | QA suite: `test-suite.js` (50-assertion functional sweep), `test-ui.js` (interaction clicks), `test-mobile.js` (single-file boot), `smoke.js` (route render). `npm install` in this folder first (jsdom etc.) |
+| `tests/` | QA suite: `test-suite.js` (88-assertion functional sweep), `test-ui.js` (32 interaction clicks), `test-mobile.js` (single-file boot), `smoke.js` (12-route render). `npm install` in this folder first (jsdom etc.) |
 
 ## Run it locally (5 seconds)
 
@@ -73,5 +73,5 @@ node scripts/sync-www.js ../native/www && (cd ../native && npx cap sync)   # nat
 
 ## Quality status
 
-50/50 functional QA · 21/21 interaction tests · 12/12 routes · PWA installable · offline-capable ·
+88/88 functional QA · 32/32 interaction tests · 12/12 routes · PWA installable · offline-capable ·
 mobile-first with safe-area insets, touch-assist & desktop drag-scroll · WCAG-minded focus states.
