@@ -1,0 +1,56 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start dev server (live reload)",
+      "type": "shell",
+      "command": "node web/scripts/dev-server.js",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "dedicated", "close": false }
+    },
+    {
+      "label": "Run QA suite",
+      "type": "shell",
+      "command": "node test-suite.js",
+      "options": { "cwd": "${workspaceFolder}/tests" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run all tests",
+      "type": "shell",
+      "command": "node smoke.js && node test-ui.js && node test-suite.js && node test-mobile.js",
+      "options": { "cwd": "${workspaceFolder}/tests" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build single-file app",
+      "type": "shell",
+      "command": "node scripts/build-mobile.js && node ../tests/test-mobile.js",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Sync native www",
+      "type": "shell",
+      "command": "node web/scripts/sync-www.js native/www",
+      "problemMatcher": []
+    },
+    {
+      "label": "Link Vercel project (one-time)",
+      "type": "shell",
+      "command": "npx vercel link",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Deploy to Vercel (update live app)",
+      "type": "shell",
+      "command": "npx vercel deploy --prod",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "problemMatcher": []
+    }
+  ]
+}

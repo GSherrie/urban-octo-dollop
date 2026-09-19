@@ -1,0 +1,8 @@
+{
+  "search.exclude": { "**/node_modules": true, "**/builds": true, "**/.vscode/chrome-profile": true },
+  "files.exclude": { "**/.DS_Store": true },
+  "files.watcherExclude": { "**/node_modules/**": true, "**/.vscode/chrome-profile/**": true },
+  "editor.tabSize": 2,
+  "editor.formatOnSave": false,
+  "html.format.enable": false
+}

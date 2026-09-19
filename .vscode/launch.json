@@ -1,0 +1,40 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug SherPay in Chrome",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:8000",
+      "webRoot": "${workspaceFolder}/web",
+      "preLaunchTask": "Start dev server (live reload)",
+      "sourceMaps": true,
+      "userDataDir": "${workspaceFolder}/.vscode/chrome-profile"
+    },
+    {
+      "name": "Debug SherPay in Edge",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:8000",
+      "webRoot": "${workspaceFolder}/web",
+      "preLaunchTask": "Start dev server (live reload)",
+      "sourceMaps": true
+    },
+    {
+      "name": "Debug QA suite (Node)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/tests/test-suite.js",
+      "cwd": "${workspaceFolder}/tests",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug current JS file (Node)",
+      "type": "node",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${fileDirname}",
+      "console": "integratedTerminal"
+    }
+  ]
+}

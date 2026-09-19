@@ -1,0 +1,15 @@
+{
+  "appId": "com.sherpay.app",
+  "appName": "SherPay",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "allowsLinkPreview": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
