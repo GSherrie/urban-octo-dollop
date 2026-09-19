@@ -1,8 +1,8 @@
 /* SherPay service worker — offline-first app shell (network-first with cache fallback) */
-const CACHE = 'sherpay-v10';
+const CACHE = 'sherpay-v11';
 const CORE = [
-  './', 'index.html', 'styles.css?v=10', 'manifest.json',
-  'js/store.js?v=10', 'js/ui.js?v=10', 'js/views-auth.js?v=10', 'js/views-main.js?v=10', 'js/views-editor.js?v=10', 'js/views-ops.js?v=10', 'js/views-biz.js?v=10', 'js/views-account.js?v=10',
+  './', 'index.html', 'styles.css?v=11', 'manifest.json',
+  'js/store.js?v=11', 'js/ui.js?v=11', 'js/views-auth.js?v=11', 'js/views-main.js?v=11', 'js/views-editor.js?v=11', 'js/views-ops.js?v=11', 'js/views-biz.js?v=11', 'js/views-account.js?v=11',
   'assets/logo.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/icon-maskable.png', 'assets/apple-touch-icon.png'
 ];
 
