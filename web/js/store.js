@@ -23,11 +23,30 @@ window.Store = (function () {
   const addDays = (dateStr, n) => { const d = new Date(dateStr + 'T00:00:00'); d.setDate(d.getDate() + n); return iso(d); };
   const addMonths = (dateStr, n) => { const d = new Date(dateStr + 'T00:00:00'); d.setMonth(d.getMonth() + n); return iso(d); };
   const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+  // Date format comes from Account ▸ Preferences (default DD/MM/YYYY). Every view, print
+  // sheet and export goes through fmtDate, so one setting drives the whole app.
   const fmtDate = (dateStr) => {
     if (!dateStr) return '—';
     const d = new Date(dateStr + (dateStr.length === 10 ? 'T00:00:00' : ''));
+    const fmt = (db && db.settings && db.settings.preferences && db.settings.preferences.dateFormat) || 'DD/MM/YYYY';
+    if (fmt === 'YYYY-MM-DD') return iso(d);
+    if (fmt === 'MM/DD/YYYY') return pad(d.getMonth() + 1, 2) + '/' + pad(d.getDate(), 2) + '/' + d.getFullYear();
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
+
+  /* ---------------- business period (Account ▸ Preferences ▸ start of month) ----------------
+     Day 1 (default) keeps calendar months; day 15 makes the period run 15th → 14th so the
+     budget, "collected this period" and expense KPIs line up with how a business is paid. */
+  function periodRange(now) {
+    const startDay = (db && db.settings && db.settings.preferences && db.settings.preferences.monthStart) || 1;
+    const t = now || new Date();
+    const start = new Date(t.getFullYear(), t.getMonth(), startDay);
+    if (t.getDate() < startDay) start.setMonth(start.getMonth() - 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, startDay);
+    end.setDate(end.getDate() - 1);
+    return { start: iso(start), end: iso(end), label: fmtDate(iso(start)) };
+  }
+  const inPeriod = (dateStr, range) => !!dateStr && dateStr >= range.start && dateStr <= range.end;
   const fmtDateTime = (ts) => new Date(ts).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   const monthKey = (dateStr) => dateStr.slice(0, 7);
   const monthLabel = (key) => new Date(key + '-01T00:00:00').toLocaleDateString('en-GB', { month: 'short' });
@@ -270,16 +289,16 @@ window.Store = (function () {
     return { months, rev, exp };
   }
   function kpis() {
-    const m = monthKey(todayISO());
+    const range = periodRange();
     let outstanding = 0, paidMonth = 0, expMonth = 0, overdueCount = 0;
     db.invoices.forEach((inv) => {
       const t = computeTotals(inv); const st = displayStatus(inv);
       if (st !== 'paid' && st !== 'draft') outstanding += t.balance;
       if (st === 'overdue') overdueCount++;
-      (inv.payments || []).forEach((p) => { if (monthKey(p.date) === m) paidMonth += num(p.amount); });
+      (inv.payments || []).forEach((p) => { if (inPeriod(p.date, range)) paidMonth += num(p.amount); });
     });
-    db.expenses.forEach((e) => { if (monthKey(e.date) === m) expMonth += num(e.total); });
-    return { outstanding, paidMonth, expMonth, net: paidMonth - expMonth, overdueCount };
+    db.expenses.forEach((e) => { if (inPeriod(e.date, range)) expMonth += num(e.total); });
+    return { outstanding, paidMonth, expMonth, net: paidMonth - expMonth, overdueCount, period: range };
   }
 
   /* ---------------- auth: offline-first accounts ----------------
