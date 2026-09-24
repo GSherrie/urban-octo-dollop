@@ -1,148 +1,42 @@
-'use client'
-/*
- * Resend strategy for auth emails
- * --------------------------------
- * Preferred path:
- *   - Use Supabase Auth SMTP/Resend integration for verification, OTP, and
- *     password reset emails. Those emails are part of the Supabase Auth token
- *     lifecycle, so they are easiest to manage from the Supabase dashboard.
- *
- * Custom path (only if you need custom email content/tracking):
- *   - next-web/supabase/functions/resend-verification   — Supabase edge function
- *   - next-web/lib/email/send-verification.ts           — app-side helper
- *   - next-web/lib/email/provider.ts                    — Resend provider contract
- *
- * The custom function is scaffolded but not deployed yet. Until it is deployed,
- * the client fallback in this page (supabase.auth.signUp) is still used as a
- * resend shortcut.
- */
-
-
-
-import { createClient } from '@/utils/supabase/client'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { Mail, RefreshCw } from 'lucide-react'
-
-export default function VerifyPage() {
-  const [email, setEmail] = useState('')
-  const [resendLoading, setResendLoading] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
-  const supabase = createClient()
-
-  useEffect(() => {
-    // Get email from URL params
-    const params = new URLSearchParams(window.location.search)
-    const emailParam = params.get('email') || ''
-    if (emailParam) {
-      setEmail(emailParam)
-    }
-  }, [])
-
-  useEffect(() => {
-    // Check if there's a confirmation token in the URL hash
-    const checkConfirmation = async () => {
-      const hash = window.location.hash
-      if (hash && hash.includes('access_token') && hash.includes('refresh_token')) {
-        // Tokens are available, session is set automatically by Supabase
-        setMessage('Email verified successfully!')
-        setTimeout(() => {
-          router.push('/protected')
-        }, 2000)
-      }
-    }
-
-    checkConfirmation()
-  }, [])
-
-  const handleResendVerification = async () => {
-    if (!email) {
-      setError('Please enter your email address')
-      return
-    }
-
-    setResendLoading(true)
-    setError(null)
-    setMessage(null)
-
+"use client";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import AuthLayout from "@/components/auth-layout";
+import { Alert } from "@/components/alert";
+function VerifyInner() {
+  const params = useSearchParams();
+  const initial = params.get("email") ?? "";
+  const supabase = createClient();
+  const [email, setEmail] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const resend = async () => {
+    if (!email.trim()) { setError("Enter the email you signed up with."); return; }
+    setBusy(true); setError(null); setMsg(null);
     try {
-      const { error: resendError } = await supabase.functions.invoke('resend-verification', {
-        body: { email },
-      })
-
-      if (resendError) {
-        throw resendError
-      }
-
-      setMessage('Verification email resent! Please check your inbox.')
-    } catch (err) {
-      // Fallback: Use auth.signUp to resend confirmation
-      try {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password: 'resend' })
-        if (signUpError) throw signUpError
-        setMessage('Verification email resent! Please check your inbox.')
-      } catch (fallbackErr) {
-        setError(fallbackErr instanceof Error ? fallbackErr.message : 'Failed to resend verification email')
-      }
-    } finally {
-      setResendLoading(false)
-    }
-  }
-
+      const { error: err } = await supabase.auth.resend({ type: "signup", email: email.trim() });
+      if (err) throw err;
+      setMsg("Verification email sent. Check your inbox.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not resend the email."); }
+    finally { setBusy(false); }
+  };
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <div className="w-full max-w-md space-y-8 bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center">
-          <div className="flex justify-center mb-4">
-            <Mail className="h-12 w-12 text-blue-600" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">Check your email</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            We&apos;ve sent a verification email to <strong>{email}</strong>. 
-            Please check your inbox and click the link to verify your account.
-          </p>
+    <AuthLayout title="Check your email" sub={email ? `We sent a verification link to ${email}.` : "Confirm your email to finish setup."} footer={<Link className="font-medium text-brand-700 hover:text-brand-800" href="/auth/login">Back to sign in</Link>}>
+      {error ? <div className="mb-4"><Alert tone="error">{error}</Alert></div> : null}
+      {msg ? <div className="mb-4"><Alert tone="success">{msg}</Alert></div> : null}
+      <div className="space-y-4">
+        <div>
+          <label className="sp-label" htmlFor="email">Email address</label>
+          <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="sp-input" placeholder="you@example.com" />
         </div>
-
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600">{error}</p>
-          </div>
-        )}
-
-        {message && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-sm text-green-600">{message}</p>
-          </div>
-        )}
-
-        <div className="mt-8 space-y-4">
-          <button
-            onClick={handleResendVerification}
-            disabled={resendLoading}
-            className="w-full flex justify-center items-center py-2 px-4 border border-blue-600 rounded-lg text-sm font-medium text-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {resendLoading ? (
-              <>
-                <RefreshCw className="animate-spin h-4 w-4 mr-2" />
-                Resending...
-              </>
-            ) : (
-              'Resend verification email'
-            )}
-          </button>
-        </div>
-
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => router.push('/auth/login')}
-            className="text-sm text-gray-600 hover:text-blue-600"
-          >
-            Back to sign in
-          </button>
-        </div>
+        <button type="button" onClick={resend} disabled={busy} className="sp-btn sp-btn-secondary w-full">{busy ? "Sending…" : "Resend verification email"}</button>
       </div>
-    </div>
-  )
+    </AuthLayout>
+  );
+}
+export default function VerifyPage() {
+  return (<Suspense fallback={<div className="p-8 text-sm text-ink-secondary">Loading…</div>}><VerifyInner /></Suspense>);
 }

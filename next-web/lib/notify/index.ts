@@ -68,11 +68,11 @@ async function sendAppEmail(options: NotificationOptions): Promise<NotifyResult>
 
   // Use the same Resend provider used by the email layer.
   // In server code this should be constructed from server-safe env access only.
-  const apiKey =
-    process.env["RESEND_API_KEY"] || process.env["RESEND_KEY"] || ""
-  const from = process.env["RESEND_FROM"] || "no-reply@sherpay.app"
-
-  if (!apiKey.startsWith("re_")) {
+  const apiKey = process.env["RESEND_API_KEY"] || process.env["RESEND_KEY"] || "";
+  const from = process.env["RESEND_FROM"] || "no-reply@sherpay.app";
+  void apiKey;
+  void from;
+  if (!process.env["RESEND_API_KEY"]?.startsWith("re_")) {
     return { ok: false, error: "Resend API key is not configured for app emails" }
   }
 
@@ -132,6 +132,7 @@ export function appEmailBody(
 }
 
 async function recordInAppNotification(_options: NotificationOptions): Promise<void> {
+  void _options
   // Placeholder for persisting notifications to the database and/or
   // broadcasting them through Supabase Realtime.
   await Promise.resolve()

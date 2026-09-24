@@ -1,142 +1,59 @@
-'use client'
-
-import { createClient } from '@/utils/supabase/client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { Mail, Lock, ArrowRight } from 'lucide-react'
-
+"use client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import AuthLayout from "@/components/auth-layout";
+import { Alert } from "@/components/alert";
+import { FieldError } from "@/components/ui";
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
-  const supabase = createClient()
-
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-
+  const router = useRouter();
+  const supabase = createClient();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  const emailInvalid = touched && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setTouched(true);
+    if (!email.trim() || !password || emailInvalid) return;
+    setLoading(true);
+    setError(null);
     try {
-      const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (signInError) {
-        throw signInError
-      }
-
-      if (user) {
-        router.push('/protected')
-      }
+      const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (err) throw err;
+      router.push("/dashboard");
+      router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred during login')
-    } finally {
-      setLoading(false)
-    }
-  }
-
+      setError(err instanceof Error ? friendly(err.message) : "Could not sign in. Check your details and try again.");
+    } finally { setLoading(false); }
+  };
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <div className="w-full max-w-md space-y-8 bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Welcome back</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Sign in to your SherPay account
-          </p>
+    <AuthLayout title="Sign in" sub="Welcome back to SherPay." footer={<span>New to SherPay? <Link className="font-medium text-brand-700 hover:text-brand-800" href="/auth/signup">Create an account</Link></span>}>
+      {error ? <div className="mb-4"><Alert tone="error">{error}</Alert></div> : null}
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <div>
+          <label className="sp-label" htmlFor="email">Email address</label>
+          <input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched(true)} aria-invalid={emailInvalid || undefined} aria-describedby={emailInvalid ? "email-err" : undefined} className="sp-input" placeholder="you@example.com" />
+          {emailInvalid ? <div id="email-err"><FieldError>Enter a valid email address.</FieldError></div> : null}
         </div>
-
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600">{error}</p>
+        <div>
+          <div className="flex items-baseline justify-between">
+            <label className="sp-label" htmlFor="password">Password</label>
+            <Link href="/auth/forgot-password" className="text-[13px] font-medium text-brand-700 hover:text-brand-800">Forgot password?</Link>
           </div>
-        )}
-
-        <form onSubmit={handleLogin} className="mt-8 space-y-6">
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="you@example.com"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="text-sm">
-              <Link href="/auth/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
-                Forgot your password&apos;?
-              </Link>
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent placeholder-gray-500 text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                'Signing in...'
-              ) : (
-                <>
-                  <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                    <ArrowRight className="h-5 w-5 text-blue-500 group-hover:text-blue-400" />
-                  </span>
-                  Sign in
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-600">
-          Don't have an account?{' '}
-          <Link href="/auth/signup" className="font-medium text-blue-600 hover:text-blue-500">
-            Sign up
-          </Link>
+          <input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="sp-input" placeholder="Enter your password" />
         </div>
-      </div>
-    </div>
-  )
+        <button type="submit" disabled={loading} className="sp-btn sp-btn-primary w-full">{loading ? "Signing in…" : "Sign in"}</button>
+      </form>
+    </AuthLayout>
+  );
+}
+function friendly(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login") || m.includes("invalid credentials")) return "Email or password is incorrect. Try again or reset your password.";
+  if (m.includes("email not confirmed") || m.includes("not confirmed")) return "Please confirm your email first. Check your inbox for the verification link.";
+  return msg;
 }

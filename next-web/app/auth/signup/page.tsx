@@ -1,171 +1,61 @@
-'use client'
-
-import { createClient } from '@/utils/supabase/client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { Mail, Lock, User, ArrowRight } from 'lucide-react'
-
+"use client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import AuthLayout from "@/components/auth-layout";
+import { Alert } from "@/components/alert";
+import { FieldError, FormHint } from "@/components/ui";
 export default function SignupPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
-  const supabase = createClient()
-
-  const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-
+  const router = useRouter();
+  const supabase = createClient();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  const emailBad = touched && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const passBad = touched && password.length > 0 && password.length < 8;
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setTouched(true);
+    if (!name.trim() || !email.trim() || password.length < 8 || emailBad) return;
+    setLoading(true);
+    setError(null);
     try {
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: name,
-          },
-        },
-      })
-
-      if (signUpError) {
-        throw signUpError
+      const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim() } } });
+      if (err) throw err;
+      if (data.user) {
+        const { data: { user: u } } = await supabase.auth.getUser();
+        if (u?.email_confirmed_at) { router.push("/dashboard"); router.refresh(); }
+        else router.push(`/auth/verify?email=${encodeURIComponent(email.trim())}`);
       }
-
-      if (authData.user) {
-        const { data: { user: currentUser } } = await supabase.auth.getUser()
-        
-        if (currentUser?.email_confirmed_at) {
-          router.push('/protected')
-        } else {
-          router.push(`/auth/verify?email=${encodeURIComponent(email)}`)
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred during signup')
-    } finally {
-      setLoading(false)
-    }
-  }
-
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not create your account. Try again."); }
+    finally { setLoading(false); }
+  };
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
-      <div className="w-full max-w-md space-y-8 bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Create your account</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Join SherPay and start managing your finances today
-          </p>
+    <AuthLayout title="Create your account" sub="Start tracking income and expenses in minutes." footer={<span>Already have an account? <Link className="font-medium text-brand-700 hover:text-brand-800" href="/auth/login">Sign in</Link></span>}>
+      {error ? <div className="mb-4"><Alert tone="error">{error}</Alert></div> : null}
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <div>
+          <label className="sp-label" htmlFor="name">Full name</label>
+          <input id="name" name="name" type="text" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} className="sp-input" placeholder="Ama Serwaa" />
+          {touched && !name.trim() ? <FieldError>Enter your name.</FieldError> : null}
         </div>
-
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSignup} className="mt-8 space-y-6">
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Full Name
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="John Doe"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="you@example.com"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="••••••••"
-                />
-              </div>
-              <p className="mt-1 text-xs text-gray-500">
-                Must be at least 6 characters long
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent placeholder-gray-500 text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                'Creating account...'
-              ) : (
-                <>
-                  <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                    <ArrowRight className="h-5 w-5 text-blue-500 group-hover:text-blue-400" />
-                  </span>
-                  Create account
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link href="/auth/login" className="font-medium text-blue-600 hover:text-blue-500">
-            Sign in
-          </Link>
+        <div>
+          <label className="sp-label" htmlFor="email">Email address</label>
+          <input id="email" name="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched(true)} aria-invalid={emailBad || undefined} className="sp-input" placeholder="you@example.com" />
+          {emailBad ? <FieldError>Enter a valid email address.</FieldError> : null}
         </div>
-      </div>
-    </div>
-  )
+        <div>
+          <label className="sp-label" htmlFor="password">Password</label>
+          <input id="password" name="password" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} aria-describedby="pw-hint" className="sp-input" placeholder="Minimum 8 characters" />
+          <div id="pw-hint"><FormHint>Use at least 8 characters.</FormHint></div>
+          {passBad ? <FieldError>Password must be at least 8 characters.</FieldError> : null}
+        </div>
+        <button type="submit" disabled={loading} className="sp-btn sp-btn-primary w-full">{loading ? "Creating account…" : "Create account"}</button>
+      </form>
+    </AuthLayout>
+  );
 }
