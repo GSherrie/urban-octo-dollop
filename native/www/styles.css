@@ -1,12 +1,12 @@
 /* ============ SherPay design system ============ */
 :root{
   --navy-900:#041C3A; --navy-800:#06244B; --navy-700:#0A2E5F; --navy-600:#0E3A78;
-  --blue:#0B7CFF; --blue-light:#2FA8FF; --blue-soft:#E8F3FF;
-  --green:#12D48A; --green-dark:#0BAF72; --green-soft:#E4FAF1;
-  --red:#E5484D; --red-soft:#FDECEC;
+  --blue:#0A6BDC; --blue-light:#2FA8FF; --blue-soft:#E8F3FF;
+  --green:#12D48A; --green-dark:#0E8059; --green-soft:#E4FAF1;
+  --red:#D22B2F; --red-soft:#FDECEC;
   --amber:#F5A524; --amber-soft:#FEF4E2;
   --violet:#7C6BF2; --violet-soft:#EFECFE;
-  --ink:#0F1B2D; --muted:#5B6B7F; --faint:#8A97A8;
+  --ink:#0F1B2D; --muted:#5B6B7F; --faint:#67748B;
   --bg:#F4F7FB; --card:#FFFFFF; --line:#E3EAF3; --line-2:#EDF2F8;
   --radius:14px; --radius-sm:10px;
   --shadow:0 1px 2px rgba(16,42,67,.06), 0 6px 24px -12px rgba(16,42,67,.18);
@@ -24,6 +24,22 @@ svg.flip{transform:rotate(180deg)}
 img{-webkit-user-drag:none}
 body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .btn:focus-visible,.nav-item:focus-visible,.chip:focus-visible,.swatch:focus-visible,.bottomnav button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* ---------- accessible toggle switch ---------- */
+.switch{position:relative;display:inline-block;width:42px;height:24px;flex:0 0 auto}
+.switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.switch .track{position:absolute;inset:0;background:var(--line);border-radius:99px;transition:background .15s;pointer-events:none}
+.switch .track::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(16,42,67,.35);transition:transform .15s}
+.switch input:checked + .track{background:var(--green)}
+.switch input:checked + .track::after{transform:translateX(18px)}
+.switch input:focus-visible + .track{outline:2px solid var(--blue);outline-offset:2px}
+
+/* ---------- first-run data/privacy notice ---------- */
+.legal-notice{position:fixed;left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:95;display:flex;align-items:center;gap:14px;max-width:720px;margin:0 auto;background:var(--navy-800);color:#fff;border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-lg)}
+.legal-notice .ln-txt{flex:1;display:grid;gap:2px;font-size:12.5px;line-height:1.45}
+.legal-notice .ln-txt span{color:#C9D9EC}
+@media (max-width:640px){.legal-notice{flex-direction:column;align-items:stretch;text-align:left}}
 ::selection{background:#BFE0FF}
 
 /* ---------- boot splash (animated logo on every app load) ---------- */
@@ -375,6 +391,11 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 .srow{display:flex;align-items:center;gap:8px}
 .srow svg{width:16px;height:16px}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+/* ---------- reduced motion (accessibility) ---------- */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}
+}
 
 /* ---------- print ---------- */
 @media print{

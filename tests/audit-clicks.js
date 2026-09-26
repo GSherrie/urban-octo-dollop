@@ -30,6 +30,7 @@ for (const f of ['js/store.js', 'js/ui.js', 'js/views-auth.js', 'js/views-main.j
 }
 const S = w.Store, UI = w.UI;
 S.boot();
+if (S.resetDemo) S.resetDemo(); // sample dataset for the click-through audit
 if (!S.Auth.current()) S.Auth.signup({ name: 'Audit', email: 'audit@sherpay.app', password: 'password123' });
 UI.start();
 

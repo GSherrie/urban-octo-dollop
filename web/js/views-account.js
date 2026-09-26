@@ -39,9 +39,11 @@
   function row(ic, title, sub, ctl) {
     return '<div class="row"><div class="srow">' + icon(ic) + '<div><b>' + title + '</b><div class="tiny muted">' + sub + '</div></div></div>' + (ctl || '') + '</div>';
   }
+  const TOGGLE_LABELS = { security: 'Security notifications', tx: 'Transaction alerts', budget: 'Budget alerts', reminder: 'Bill reminders', pay: 'Payment notifications', mkt: 'Marketing notifications', analytics: 'Share anonymous usage statistics' };
   function toggleChip(key) {
-    const on = notif(key, key !== 'mkt');
-    return '<span class="chip toggle' + (on ? ' on' : '') + '" data-toggle="' + key + '" role="switch" aria-checked="' + !!on + '">' + (on ? 'On' : 'Off') + '</span>';
+    const dflt = key === 'analytics' ? false : key !== 'mkt';
+    const on = notif(key, dflt);
+    return '<label class="switch" data-toggle="' + key + '"><input type="checkbox" role="switch"' + (on ? ' checked' : '') + ' aria-label="' + (TOGGLE_LABELS[key] || key) + '"><span class="track"></span></label>';
   }
   function themeChip(t, label) {
     const active = (prefs().theme || 'system') === t;
@@ -123,7 +125,6 @@
       html:
         '<div class="card card-b settings-list">' +
           row('lock', 'Change password / PIN', 'Update your login credentials', '<button class="btn sm primary" data-action="change-pw">Update</button>') +
-          row('eye', 'Face ID / Touch ID', 'Biometric unlock on supported devices', '<span class="chip" style="border:none;background:var(--green-soft);color:var(--green-dark)">Enabled</span>') +
           row('bell', 'Two-factor authentication', twoFA ? '2FA is protecting your logins' : 'Add an extra layer of security', '<span class="chip" style="border:none;background:' + (twoFA ? 'var(--green-soft);color:var(--green-dark)' : 'var(--line);color:var(--muted)') + '">' + (twoFA ? 'On' : 'Off') + '</span><button class="btn sm ghost" data-action="twofa">' + (twoFA ? 'Manage' : 'Set up') + '</button>') +
           row('sync', 'Login / session management', 'Devices currently signed in', '<button class="btn sm ghost" data-action="sessions">Manage</button>') +
           row('mail', 'Change phone / email', 'Update your contact details', '<button class="btn sm ghost" data-action="change-contact">Change</button>') +
@@ -211,10 +212,13 @@
       title: 'Data &amp; privacy',
       html:
         '<div class="card card-b settings-list">' +
+          row('sync', 'Cloud sync', S.cloud.enabled() ? 'On — your workspace follows your account on any device' : 'Off — data lives only on this device', '<button class="btn sm ghost" data-action="cloud-sync">' + icon('sync') + 'Sync now</button>') +
+          (S.cloud.hasConflict() ? row('alert', 'Conflicted copy archived', 'A sync conflict kept an older copy safe — download it from Settings ▸ Data', '<span class="chip" style="border:none;background:var(--amber-soft);color:#8F5B00">Review</span>') : '') +
           row('download', 'Export transactions', 'All invoices, payments &amp; expenses as CSV', '<button class="btn sm primary" data-action="export-csv">Export</button>') +
           row('print', 'Download financial report', 'Month-by-month P&amp;L summary (CSV)', '<button class="btn sm primary" data-action="export-report">Download</button>') +
           row('eye', 'Privacy settings', 'Share anonymous usage statistics', toggleChip('analytics')) +
           row('link', 'Connected services', 'Accounts linked to SherPay', '<span class="chip">None</span>') +
+          row('cloud-off', 'Sign out everywhere', 'End sessions on all other devices for this cloud account', '<button class="btn sm ghost" data-action="signout-all">Sign out</button>') +
           row('trash', 'Delete account', 'Permanently remove your account &amp; all data', '<button class="btn sm danger" data-action="delete-account">Delete</button>') +
         '</div>'
     };
@@ -244,8 +248,10 @@
           row('more', 'App version', 'SherPay for Web &amp; Mobile · build ' + esc(BUILD), '<span class="chip">v' + VERSION + '</span>') +
           row('sync', 'Check for updates', 'Force this device onto the newest build (your data stays)', '<button class="btn sm primary" data-action="refresh-app">Refresh</button>') +
           row('file', 'Terms of Service', 'The rules for using SherPay', '<button class="btn sm ghost" data-action="tos">View</button>') +
-          row('lock', 'Privacy Policy', 'How we collect &amp; protect your data', '<button class="btn sm ghost" data-action="privacy">View</button>') +
-          row('card', 'Licenses', 'Open-source software we build on', '<button class="btn sm ghost" data-action="licenses">View</button>') +
+          row('lock', 'Privacy Policy', 'Your data stays on your device', '<button class="btn sm ghost" data-action="privacy">View</button>') +
+          row('card', 'Cookie Policy', 'No cookies, no trackers — how local storage works', '<button class="btn sm ghost" data-action="cookies">View</button>') +
+          row('more', 'Refund Policy', 'Refunds on SherPay and on invoices you issue', '<button class="btn sm ghost" data-action="refund">View</button>') +
+          row('file', 'Licenses', 'Open-source software we build on', '<button class="btn sm ghost" data-action="licenses">View</button>') +
         '</div>'
     };
   }
@@ -261,7 +267,7 @@
         '<div class="card card-b mt2" style="border-color:var(--red);background:var(--red-soft)">' +
           '<div class="row"><div class="srow" style="flex:1;color:var(--red)">' + icon('trash') + '<div><b>Delete account</b><div class="tiny muted">Erase every invoice, client, expense &amp; setting on this device</div></div></div><button class="btn sm danger" data-action="delete-account">Delete account</button></div>' +
         '</div>' +
-        '<div class="tiny muted" style="text-align:center;margin:18px 0 26px">SherPay v' + VERSION + ' · Made with care in Accra</div>'
+        '<div class="tiny muted" style="text-align:center;margin:18px 0 26px">SherPay v' + VERSION + '</div>'
     };
   }
   /* ================= theme ================= */
@@ -275,10 +281,13 @@
 
   /* ================= delete account ================= */
   function deleteAccount() {
-    ['sherpay_db_v1', 'sherpay_users_v1', 'sherpay_session_v1'].forEach((k) => {
+    ['sherpay_db_v1', 'sherpay_users_v1', 'sherpay_session_v1', 'sherpay_sync_v1', 'sherpay_conflict_v1'].forEach((k) => {
       try { localStorage.removeItem(k); } catch (e) {}
       try { sessionStorage.removeItem(k); } catch (e) {}
     });
+    try {
+      if (window.supabase) Object.keys(localStorage).filter((k) => k.indexOf('sb-') === 0).forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} });
+    } catch (e) {}
     try { location.reload(); } catch (e) {}
     /* fallback when reload is blocked (tests, embedded webviews): force a fresh auth screen */
     try { UI.closeModal(); } catch (e) {}
@@ -317,13 +326,14 @@
         '<label class="f" style="margin-top:10px">New password</label><input id="pw-new" class="input" type="password" autocomplete="new-password" placeholder="At least 8 characters">' +
         '<label class="f" style="margin-top:10px">Confirm new password</label><input id="pw-confirm" class="input" type="password" autocomplete="new-password">',
       footer: '<button class="btn ghost" data-action="close-modal">Cancel</button><button class="btn primary" id="pw-save">Update password</button>',
-      mount: (m) => m.querySelector('#pw-save').addEventListener('click', () => {
+      mount: (m) => m.querySelector('#pw-save').addEventListener('click', async () => {
         const currentPw = m.querySelector('#pw-current').value;
         const next = m.querySelector('#pw-new').value;
         const confirm = m.querySelector('#pw-confirm').value;
         if (next !== confirm) { UI.toast('New passwords do not match', 'red', 'alert'); return; }
-        const res = S.Auth.changePassword({ currentPassword: currentPw, newPassword: next });
-        if (res.error) { UI.toast(res.error, 'red', 'alert'); return; }
+        const btn = m.querySelector('#pw-save'); btn.disabled = true; btn.textContent = 'Updating…';
+        const res = await S.Auth.changePassword({ currentPassword: currentPw, newPassword: next });
+        if (res.error) { btn.disabled = false; btn.textContent = 'Update password'; UI.toast(res.error, 'red', 'alert'); return; }
         UI.closeModal();
         UI.toast('Password updated', 'green', 'lock');
         S.log('security', 'Password changed from Account settings');
@@ -404,8 +414,8 @@
         '</div>' +
         '<p class="tiny muted mt">SherPay keeps sessions per device. Signing out everywhere ends this session too.</p>',
       footer: '<button class="btn ghost" data-action="close-modal">Close</button><button class="btn danger" id="ss-out">Sign out everywhere</button>',
-      mount: (m) => m.querySelector('#ss-out').addEventListener('click', () => {
-        S.Auth.logout();
+      mount: (m) => m.querySelector('#ss-out').addEventListener('click', async () => {
+        await S.Auth.signOutEverywhere();
         UI.closeModal();
         UI.toast('Signed out of all devices', 'green', 'lock');
         location.hash = '#/auth';
@@ -542,15 +552,33 @@
         'refresh-app': forceRefreshApp,
         'tos': legalModal,
         'privacy': () => legalModal('privacy'),
+        'cookies': () => legalModal('cookies'),
+        'refund': () => legalModal('refund'),
         'licenses': () => legalModal('licenses'),
         'logout': () => {
-          S.Auth.logout();
-          UI.closeModal();
-          UI.toast('Signed out — see you soon!', 'green', 'lock');
+          /* navigate first — the hash must update synchronously for tests and
+             guards; the (async in cloud mode) sign-out settles underneath. */
           location.hash = '#/auth';
-          UI.render(true);
+          UI.closeModal();
+          Promise.resolve(S.Auth.logout()).then(() => {
+            UI.toast('Signed out — see you soon!', 'green', 'lock');
+            UI.render(true);
+          });
                 },
-        'delete-account': () => UI.confirmDialog('Delete your account?', 'This permanently removes all invoices, clients, expenses and settings stored on this device. This cannot be undone.', deleteAccount, 'Delete everything')
+        'signout-all': async () => {
+          try { await S.Auth.signOutEverywhere(); UI.toast('Other sessions ended — this device stays signed in', 'green', 'cloud-off'); }
+          catch (e) { UI.toast('Could not end other sessions: ' + ((e && e.message) || 'try again'), 'red', 'alert'); }
+        },
+        'delete-account': () => UI.confirmDialog('Delete your account?', 'This permanently removes all invoices, clients, expenses and settings stored on this device. This cannot be undone.', deleteAccount, 'Delete everything'),
+        'cloud-sync': async () => {
+          if (!S.cloud.enabled()) { UI.toast('Cloud sync is off — enable it in Settings ▸ Cloud sync', 'amber', 'cloud'); return; }
+          UI.toast('Syncing…', 'blue', 'sync');
+          try {
+            const r = await S.cloud.sync();
+            UI.toast(r.action === 'pushed' ? 'Workspace uploaded' : r.action === 'pulled' ? (r.conflict ? 'Updated — an older copy was archived' : 'Latest version downloaded') : 'Already up to date', r.conflict ? 'amber' : 'green', 'sync');
+            UI.render(true);
+          } catch (e) { UI.toast('Sync failed: ' + (e.message || e), 'red', 'alert'); }
+        }
       },
       mount: function (root) {
     const bind = (id, fn) => {
@@ -586,17 +614,12 @@
         UI.toast('Theme set to ' + t, 'green', 'eye');
       });
     });
-    root.querySelectorAll('.chip.toggle[data-toggle]').forEach((el) => {
-            el.addEventListener('click', () => {
-        const key = el.dataset.toggle;
-        const dflt = key === 'analytics' ? false : key !== 'mkt';
-        const now = !notif(key, dflt);
-        st().notifications[key] = now;
+    root.querySelectorAll('.switch[data-toggle] input').forEach((el) => {
+      el.addEventListener('change', () => {
+        const key = el.closest('.switch').dataset.toggle;
+        st().notifications[key] = el.checked;
         S.save();
-        el.classList.toggle('on', now);
-        el.setAttribute('aria-checked', String(now));
-        el.textContent = now ? 'On' : 'Off';
-        UI.toast((now ? 'Enabled — ' : 'Disabled — ') + key.toUpperCase() + ' notifications', now ? 'green' : 'amber', 'bell');
+        UI.toast((el.checked ? 'Enabled — ' : 'Disabled — ') + (TOGGLE_LABELS[key] || key), el.checked ? 'green' : 'amber', 'bell');
       });
     });
   }
@@ -608,9 +631,34 @@
 
   function legalModal(kind) {
     const texts = {
-      tos: ['Terms of Service', '<p class="muted small">SherPay is provided as-is for creating, sending and tracking invoices. You are responsible for the accuracy of the invoices you issue and for keeping your credentials safe.</p><p class="muted small">We may update these terms as the product evolves; continued use means you accept the current version.</p>'],
-      privacy: ['Privacy Policy', '<p class="muted small">SherPay is local-first: your invoices, clients, expenses and settings are stored on your device and never leave it unless you explicitly export them.</p><p class="muted small">We do not sell personal data. Anonymous usage statistics, if enabled in Privacy settings, help us improve the app.</p>'],
-      licenses: ['Licenses', '<p class="muted small">SherPay is built with love and the following open-source foundations:</p><ul class="small muted"><li>Capacitor — MIT License (native shells)</li><li>Feather-style icon set — MIT License</li><li>System font stack — OS vendor licenses</li></ul>']
+      tos: ['Terms of Service',
+        '<p class="muted small"><b>1 · The service.</b> SherPay is a local-first invoicing tool. It runs in your browser and stores your data on your own device. There is no hosted server storing your business data.</p>' +
+        '<p class="muted small"><b>2 · Your responsibilities.</b> You are responsible for the accuracy and legality of the invoices, receipts and records you create, for the tax treatment of your transactions, and for keeping your device and credentials secure.</p>' +
+        '<p class="muted small"><b>3 · No professional advice.</b> SherPay does not provide accounting, legal or tax advice. Figures shown are calculations based on the data you enter. Confirm tax and reporting obligations with a qualified professional in your jurisdiction.</p>' +
+        '<p class="muted small"><b>4 · Payments.</b> SherPay does not process payments. When you share a payment link or details with a client, that transaction is between you and your client and your payment provider, under their terms.</p>' +
+        '<p class="muted small"><b>5 · Data loss.</b> Because data lives on your device, you are responsible for keeping backups (Settings → Data → Backup JSON). SherPay cannot recover deleted or lost data.</p>' +
+        '<p class="muted small"><b>6 · Liability.</b> SherPay is provided “as is” without warranties. To the maximum extent permitted by law, SherPay’s developers are not liable for losses arising from use of the app.</p>' +
+        '<p class="muted small"><b>7 · Changes.</b> These terms may be updated as the product evolves; continued use after a change means you accept the current version.</p>'],
+      privacy: ['Privacy Policy',
+        '<p class="muted small"><b>What we collect.</b> Almost nothing. SherPay is local-first: your invoices, clients, expenses, settings and login are stored only in your browser’s local storage on this device. They never leave your device unless you explicitly export them (Backup JSON / CSV) or use Restore.</p>' +
+        '<p class="muted small"><b>What we don’t collect.</b> No account data is sent to us, no analytics or advertising identifiers are collected, and no data is sold or shared with third parties.</p>' +
+        '<p class="muted small"><b>Cookies &amp; similar technologies.</b> SherPay sets no cookies and loads no third-party trackers. It uses browser local storage purely to keep the app working offline — see the Cookie Policy for details.</p>' +
+        '<p class="muted small"><b>Optional diagnostics.</b> If you use “Report a problem” or “App feedback”, the text you type (and optionally your email) stays on your device in the activity log unless you send it to us yourself.</p>' +
+        '<p class="muted small"><b>Your control (GDPR-style rights).</b> You can view, export and permanently erase all of your data at any time from Account → Data &amp; privacy, or by clearing your browser storage. Because nothing is stored on our side, that erasure is complete.</p>' +
+        '<p class="muted small"><b>Children.</b> SherPay is a business tool and is not directed at children under 16.</p>' +
+        '<p class="muted small">Questions? Contact support@sherpay.io.</p>'],
+      cookies: ['Cookie Policy',
+        '<p class="muted small"><b>Cookies:</b> none by default. SherPay does not set, read or share any cookies, and loads no third-party scripts unless you turn on optional cloud features.</p>' +
+        '<p class="muted small"><b>Local storage:</b> the app stores your data (invoices, clients, expenses, settings, session) in your browser’s local storage so it works offline and remembers you between visits. This is similar to a cookie but never transmitted to any server.</p>' +
+        '<p class="muted small"><b>Optional cloud sync:</b> if you enable it in Settings, the app loads the Supabase client from a CDN and syncs your workspace to a table in <i>your own</i> Supabase project. SherPay’s developers never see this data. Disabling cloud sync stops all external requests.</p>' +
+        '<p class="muted small"><b>Clearing it:</b> use Account → Data &amp; privacy → Delete account, or your browser’s “Clear site data”. There is no consent banner because there is nothing to consent to — no tracking technologies are used.</p>'],
+      refund: ['Refund Policy',
+        '<p class="muted small"><b>SherPay (this app) is free.</b> There is nothing to purchase in this build, so no refunds are applicable. If a paid version is introduced, its pricing and refund terms will be published here before checkout.</p>' +
+        '<p class="muted small"><b>Invoices you issue to your clients.</b> SherPay helps you create invoices but is not a party to them. Refunds, credit notes and disputes on invoices you send are handled between you and your client under your own terms. You can record refunds and part-payments against an invoice from its detail view.</p>' +
+        '<p class="muted small"><b>Questions about a payment you received?</b> Contact your payment provider (mobile money, bank or card processor) — SherPay does not hold or move funds.</p>'],
+      licenses: ['Licenses',
+        '<p class="muted small">SherPay is built with love and the following open-source foundations:</p>' +
+        '<ul class="small muted"><li>Capacitor — MIT License (native shells)</li><li>Feather-style icon set — MIT License</li><li>System font stack — OS vendor licenses</li></ul>']
     };
     const t = texts[kind] || texts.tos;
     UI.openModal({ title: t[0], body: t[1], footer: '<button class="btn ghost" data-action="close-modal">Close</button>' });

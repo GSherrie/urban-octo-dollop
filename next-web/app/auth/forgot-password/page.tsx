@@ -15,7 +15,7 @@ export default function ForgotPasswordPage() {
     if (!email.trim()) return;
     setLoading(true); setError(null);
     try {
-      const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/auth/reset-password` });
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password` });
       if (err) throw err;
       setDone(true);
     } catch (err) { setError(err instanceof Error ? err.message : "Could not send the reset link. Try again."); }
@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
   return (
     <AuthLayout title="Reset your password" sub="Enter your email and we will send you a reset link." footer={<Link className="font-medium text-brand-700 hover:text-brand-800" href="/auth/login">Back to sign in</Link>}>
       {error ? <div className="mb-4"><Alert tone="error">{error}</Alert></div> : null}
-      {done ? <Alert tone="success">If an account exists for that email, a reset link is on its way. Check your inbox.</Alert> : (
+      {done ? <Alert tone="success">If an account exists for that email, a reset link is on its way. Check your inbox and open the link on this device.</Alert> : (
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="sp-label" htmlFor="email">Email address</label>

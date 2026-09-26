@@ -57,11 +57,17 @@ window.Store = (function () {
   }
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
+  /* Default cloud project — the app always points here unless the user types
+     different values. Public anon key only, safe to ship in the bundle. */
+  const DEFAULT_CLOUD_URL = 'https://jmmrcrnfwyrbejhechke.supabase.co';
+  const DEFAULT_CLOUD_ANON = 'sb_publishable_S_HPkVny_wM-PQ4PRqXC4w_C3ufIsH8';
+
   /* ---------------- state ---------------- */
   let db = null;
 
   let saveWarned = false;
   function save() {
+    try { db.settings.updatedAt = Date.now(); } catch (e) {}
     try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
     catch (e) {
       if (!saveWarned && typeof window !== 'undefined' && window.UI && window.UI.toast) {
@@ -69,17 +75,68 @@ window.Store = (function () {
         window.UI.toast('Device storage is full — recent changes are memory-only until space is freed. Delete old receipt attachments to fix.', 'red', 'file');
       }
     }
+    scheduleCloudSave();
+  }
+  /* ---------------- automatic cloud sync (debounced push) ----------------
+     Every save() schedules a background push when cloud sync is on. The
+     1.5s debounce keeps rapid typing cheap (one push per burst) while the
+     in-flight guard means overlapping renders never corrupt the backup. */
+  let cloudSaveTimer = null, cloudSaveBusy = false;
+  function scheduleCloudSave() {
+    if (!cloudOn() || !cloudClient || !cloudUser) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    try { clearTimeout(cloudSaveTimer); } catch (e) {}
+    cloudSaveTimer = setTimeout(async () => {
+      if (cloudSaveBusy) return;
+      cloudSaveBusy = true;
+      try { await cloudSync(); } catch (e) {}
+      cloudSaveBusy = false;
+    }, 1500);
   }
   function load() {
     try {
       const raw = localStorage.getItem(DB_KEY);
-      if (raw) { db = JSON.parse(raw); return true; }
+      if (raw) {
+        db = JSON.parse(raw);
+        // Migrate older workspaces: cloud sync defaults to ON against the
+        // built-in project so accounts become real without any setup.
+        if (!db.settings) db.settings = {};
+        if (!db.settings.cloud || typeof db.settings.cloud !== 'object') db.settings.cloud = {};
+        if (!db.settings.cloud.url) db.settings.cloud.url = DEFAULT_CLOUD_URL;
+        if (!db.settings.cloud.anonKey) db.settings.cloud.anonKey = DEFAULT_CLOUD_ANON;
+        if (typeof db.settings.cloud.enabled !== 'boolean') db.settings.cloud.enabled = true;
+        return true;
+      }
     } catch (e) {}
     return false;
   }
 
-  /* ---------------- seed ---------------- */
-  function seed() {
+  /* ---------------- first run (real workspace) ----------------
+     A fresh install starts EMPTY — no fake clients, invoices or expenses.
+     Users add their own data; "Load sample data" in Settings ▸ Data (or the
+     dashboard welcome card) fills an example workspace for exploring. */
+  function blank() {
+    db = {
+      version: 1,
+      settings: {
+        business: { name: '', email: '', phone: '', address: '', logoDataUrl: null },
+        currency: 'GHS',
+        taxLabel: 'VAT', taxRate: 15,
+        prefix: 'INV', seq: 1,
+        template: { accent: 'blue', font: 'sans' },
+        reminderDays: [3, 0, -3],
+        hourlyRate: 0,
+        cloud: { enabled: true, url: DEFAULT_CLOUD_URL, anonKey: DEFAULT_CLOUD_ANON }
+      },
+      clients: [], invoices: [], expenses: [],
+      timeEntries: [],
+      activity: []
+    };
+    save();
+  }
+
+  /* ---------------- sample dataset (optional, user-initiated) ---------------- */
+  function demoData() {
     const T = todayISO();
     const biz = {
       name: 'Sherline Studio',
@@ -155,7 +212,64 @@ window.Store = (function () {
     save();
   }
 
-  /* ---------------- selectors & calc ---------------- */
+  /* ---------------- real payments (Paystack hosted checkout) ----------------
+     1. createPaymentLink(): stores an invoice snapshot as a payment_requests row
+        (anon REST insert, RLS allows) and returns the public pay.html?t= link.
+     2. syncPayments(): on app open, finds paid requests for this invoice snapshot
+        and records the payment locally + issues the receipt (idempotent by ref). */
+  function payConfig() {
+    return (db.settings && db.settings.payments) || {};
+  }
+  function payBaseUrl() {
+    const cfg = payConfig();
+    return cfg.siteUrl || (location.origin + location.pathname.replace(/[^/]*$/, ''));
+  }
+  async function createPaymentLink(invId) {
+    const inv = getInvoice(invId); if (!inv) throw new Error('invoice not found');
+    const cfg = payConfig();
+    if (!cfg.paystackPublicKey) throw new Error('Payments are not set up yet (Settings ▸ Payments)');
+    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) throw new Error('Checkout backend is not configured (run scripts/patch-pay-config.js)');
+    const c = getClient(inv.clientId);
+    const payload = {
+      invoice: { number: inv.number, dueDate: inv.dueDate, currency: inv.currency, items: inv.items },
+      totals: computeTotals(inv),
+      client: { name: c ? c.name : '', email: c ? c.email : '' },
+      business: { name: db.settings.business.name },
+      paystackPublicKey: cfg.paystackPublicKey
+    };
+    const token = (crypto && crypto.randomUUID ? crypto.randomUUID() : uid() + uid()).replace(/-/g, '');
+    const res = await fetch(cfg.supabaseUrl + '/rest/v1/payment_requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + cfg.supabaseAnonKey, Prefer: 'return=representation' },
+      body: JSON.stringify({ token, payload, currency: inv.currency, status: 'pending' })
+    });
+    if (!res.ok) throw new Error('Could not reach the checkout service (' + res.status + ')');
+    const row = (await res.json())[0];
+    return payBaseUrl().replace(/\/$/, '') + 'pay.html?t=' + encodeURIComponent(row.token);
+  }
+  async function syncPayments() {
+    const cfg = payConfig();
+    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return 0;
+    try {
+      const res = await fetch(cfg.supabaseUrl + '/rest/v1/payment_requests?status=eq.paid&select=token,reference,amount_paid,payload,currency,paid_at&order=paid_at.desc&limit=25', {
+        headers: { apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + cfg.supabaseAnonKey }
+      });
+      if (!res.ok) return 0;
+      const rows = await res.json();
+      let applied = 0;
+      for (const r of rows) {
+        const num2 = r.payload && r.payload.invoice && r.payload.invoice.number;
+        const inv = db.invoices.find((i) => i.number === num2 && i.status !== 'paid');
+        if (!inv) continue;
+        if ((inv.payments || []).some((p) => p.reference === r.reference)) continue;
+        const result = recordPayment(inv.id, r.amount_paid, 'card', (r.paid_at || '').slice(0, 10), r.reference);
+        if (result) applied++;
+      }
+      if (applied) save();
+      return applied;
+    } catch (e) { return 0; }
+  }
+
   const getClient = (id) => (db.clients.find((c) => c.id === id) || null);
   const getInvoice = (id) => (db.invoices.find((i) => i.id === id) || null);
 
@@ -233,12 +347,14 @@ window.Store = (function () {
   }
 
   /* ---------------- mutations ---------------- */
-  function recordPayment(invId, amount, method, date) {
+  function recordPayment(invId, amount, method, date, reference) {
     const inv = getInvoice(invId); if (!inv) return null;
     const t = computeTotals(inv);
     const amt = Math.min(num(amount), t.balance);
     if (amt <= 0) return null;
-    inv.payments.push({ id: uid(), date: date || todayISO(), amount: +amt.toFixed(2), method });
+    const payment = { id: uid(), date: date || todayISO(), amount: +amt.toFixed(2), method };
+    if (reference) payment.reference = reference;
+    inv.payments.push(payment);
     const after = computeTotals(inv);
     if (after.balance <= 0.009) { inv.status = 'paid'; inv.paidAt = todayISO(); }
     const m = PAY_METHODS.find((p) => p.id === method);
@@ -382,7 +498,7 @@ window.Store = (function () {
     } catch (e) {}
   }
 
-  function signup(opts) {
+  function signupLocal(opts) {
     const name = String(opts && opts.name || '').trim();
     const email = String(opts && opts.email || '').trim().toLowerCase();
     const password = String(opts && opts.password || '');
@@ -401,18 +517,33 @@ window.Store = (function () {
     return { user: publicUser(user) };
   }
 
-  function login(opts) {
+  function loginLocal(opts) {
     const email = String(opts && opts.email || '').trim().toLowerCase();
     const password = String(opts && opts.password || '');
-    if (!EMAIL_RE.test(email)) return { error: 'Enter a valid email address.' };
+    const remember = !(opts && opts.remember === false);
     const user = getUsers().find((u) => u.email === email);
-    if (!user) return { error: 'No account found with that email — try signing up instead.' };
-    if (user.passHash !== sha256(user.salt + ':' + password)) return { error: 'Incorrect password. Please try again.' };
-    startSession(user, !!(opts && opts.remember));
+    if (!user) return { error: 'No account found for this email — try signing up.' };
+    if (user.passHash !== sha256(user.salt + ':' + password)) return { error: 'Incorrect password.' };
+    startSession(user, remember);
     return { user: publicUser(user) };
   }
 
-    function current() {
+  /* Local auth stays synchronous (tests + UI call sites read .user directly).
+     Cloud variants are async on S.Auth.cloudAuth — views pick it when enabled. */
+  function signup(opts) { return signupLocal(opts); }
+  function login(opts) { return loginLocal(opts); }
+  function changePassword(opts) { return changePasswordLocal(opts); }
+  function sendResetLocal() {
+    return { error: 'Password reset needs cloud sync — enable it in Settings first.' };
+  }
+
+  function useCloud() {
+    try { return !!(db && db.settings && db.settings.cloud && db.settings.cloud.enabled); }
+    catch (e) { return false; }
+  }
+
+  function current() {
+    if (useCloud() && cloudUser) return { id: cloudUser.id, name: cloudUser.name, email: cloudUser.email };
     try {
       const raw = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(SESSION_KEY)) || localStorage.getItem(SESSION_KEY);
       if (!raw) return null;
@@ -432,8 +563,7 @@ window.Store = (function () {
     } catch (e) {}
   }
 
-  function changePassword(opts) {
-    const cur = current();
+  function changePasswordLocal(opts) {
     if (!cur) return { error: 'Not authenticated.' };
     const users = getUsers();
     const user = users.find((u) => u.id === cur.id);
@@ -450,7 +580,176 @@ window.Store = (function () {
   }
 
 
-  /* ---------------- export helpers ---------------- */
+  /* ---------------- cloud accounts & sync (optional, user's own Supabase) ----------------
+     - Auth: real Supabase Auth replaces local device accounts when enabled.
+     - Sync: the whole workspace is one document in a per-user cloud_state row.
+       Last-write-wins by updated_at; if both sides changed, the newer wins and
+       the losing copy is archived locally (Account ▸ Data) — never silently lost. */
+  const SYNC_KEY = 'sherpay_sync_v1';
+  const CONFLICT_KEY = 'sherpay_conflict_v1';
+  let cloudClient = null, cloudUser = null, cloudStatus = 'off', cloudLastError = null, cloudLastAction = 'never';
+
+  function cloudLastSync() { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || '{"at":0}').at || 0; } catch (e) { return 0; } }
+  function cloudConflict() { try { return JSON.parse(localStorage.getItem(CONFLICT_KEY) || 'null'); } catch (e) { return null; } }
+  function cloudRestoreConflict() {
+    const c = cloudConflict();
+    if (!c || !c.db) return false;
+    db = c.db;
+    try { localStorage.removeItem(CONFLICT_KEY); } catch (e) {}
+    save(); setSyncMeta(db.settings.updatedAt || Date.now());
+    return true;
+  }
+  function cloudDiscardConflict() { try { localStorage.removeItem(CONFLICT_KEY); } catch (e) {} }
+  function cloudExportConflict() {
+    const c = cloudConflict();
+    if (!c || !c.db) return false;
+    download('sherpay-conflict-' + todayISO() + '.json', JSON.stringify(c.db), 'application/json');
+    return true;
+  }
+
+  function loadSupabaseJs() {
+    if (window.supabase && window.supabase.createClient) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      s.onload = res;
+      s.onerror = () => rej(new Error('Could not load the cloud client — check your connection.'));
+      document.head.appendChild(s);
+    });
+  }
+  function cloudOn() {
+    const c = db && db.settings && db.settings.cloud;
+    return !!(c && c.enabled && c.url && c.anonKey);
+  }
+  function syncMeta() { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || '{"at":0}'); } catch (e) { return { at: 0 }; } }
+  function setSyncMeta(at) { try { localStorage.setItem(SYNC_KEY, JSON.stringify({ at: at || 0 })); } catch (e) {} }
+  function mapUser(u) {
+    return {
+      id: u.id,
+      name: (u.user_metadata && (u.user_metadata.full_name || u.user_metadata.name)) || String(u.email || '').split('@')[0],
+      email: u.email || '',
+      loginAt: Date.parse(u.last_sign_in_at || '') || Date.now()
+    };
+  }
+  function authPageUrl() {
+    return location.origin + location.pathname.replace(/[^/]*$/, '') + 'auth.html';
+  }
+  function archiveConflict() {
+    try { localStorage.setItem(CONFLICT_KEY, JSON.stringify({ at: Date.now(), db: JSON.parse(JSON.stringify(db)) })); } catch (e) {}
+  }
+  function hasConflictArchive() { try { return !!localStorage.getItem(CONFLICT_KEY); } catch (e) { return false; } }
+
+  async function cloudInit() {
+    if (!db.settings.cloud || typeof db.settings.cloud !== 'object') db.settings.cloud = {};
+    const cfg = db.settings.cloud;
+    if (!cfg.url) cfg.url = DEFAULT_CLOUD_URL;
+    if (!cfg.anonKey) cfg.anonKey = DEFAULT_CLOUD_ANON;
+    if (typeof cfg.enabled !== 'boolean') cfg.enabled = true;
+    if (!cfg.enabled) { cloudStatus = 'off'; cloudClient = null; cloudUser = null; return; }
+    cloudStatus = 'connecting';
+    try {
+      await loadSupabaseJs();
+      cloudClient = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { detectSessionInUrl: false } });
+      const { data, error } = await cloudClient.auth.getSession();
+      if (error) throw error;
+      const u = data && data.session && data.session.user;
+      cloudUser = u ? mapUser(u) : null;
+      cloudStatus = 'on'; cloudLastError = null;
+      if (cloudUser) await cloudSync();
+    } catch (e) { cloudStatus = 'error'; cloudLastError = (e && e.message) || 'Connection failed'; }
+  }
+
+  async function cloudSync() {
+    if (!cloudClient) return { ok: false, error: 'Cloud sync is off' };
+    const { data: ud } = await cloudClient.auth.getUser();
+    const user = ud && ud.user;
+    if (!user) return { ok: false, error: 'Not signed in' };
+    const { data: row, error: rErr } = await cloudClient.from('cloud_state')
+      .select('data,updated_at').eq('user_id', user.id).maybeSingle();
+    if (rErr) throw rErr;
+    const remoteAt = row ? Date.parse(row.updated_at) : 0;
+    const localAt = db.settings.updatedAt || 0;
+    const meta = syncMeta();
+    const localDirty = localAt > (meta.at || 0);
+
+    if (row && remoteAt > (meta.at || 0) && remoteAt >= localAt) {
+      if (localDirty) archiveConflict();              // both sides changed — server wins, local archived
+      db = row.data;
+      if (!db.settings) db.settings = {};
+      db.settings.updatedAt = remoteAt;
+      save(); setSyncMeta(remoteAt);
+      cloudLastAction = 'pulled';
+      return { ok: true, action: 'pulled', conflict: localDirty };
+    }
+    if (localDirty || !row) {
+      const { error } = await cloudClient.from('cloud_state')
+        .upsert({ user_id: user.id, data: JSON.parse(JSON.stringify(db)), updated_at: new Date(localAt || Date.now()).toISOString() });
+      if (error) throw error;
+      setSyncMeta(localAt || Date.now());
+      cloudLastAction = 'pushed';
+      return { ok: true, action: 'pushed' };
+    }
+    /* Remote has nothing new and local is clean — sanity-check that the cloud
+       still holds our latest copy (covers rows deleted out-of-band), but
+       report "up to date" either way so toasts stay accurate. */
+    try {
+      const { data: check } = await cloudClient.from('cloud_state')
+        .select('updated_at').eq('user_id', user.id).maybeSingle();
+      if (!check) {
+        const { error } = await cloudClient.from('cloud_state')
+          .upsert({ user_id: user.id, data: JSON.parse(JSON.stringify(db)), updated_at: new Date(localAt || Date.now()).toISOString() });
+        if (error) throw error;
+        cloudLastAction = 'pushed';
+        return { ok: true, action: 'pushed' };
+      }
+      setSyncMeta(remoteAt || (meta.at || 0));
+    } catch (e) { setSyncMeta(remoteAt || (meta.at || 0)); }
+    cloudLastAction = 'none';
+    return { ok: true, action: 'none' };
+  }
+
+  /* cloud auth — mirrors the local Auth API (async); current() stays sync via cache */
+  const cloudAuth = {
+    async signup(opts) {
+      if (!cloudClient) await cloudInit();
+      const { data, error } = await cloudClient.auth.signUp({
+        email: String(opts.email || '').trim(), password: String(opts.password || ''),
+        options: { data: { full_name: String(opts.name || '').trim() }, emailRedirectTo: authPageUrl() }
+      });
+      if (error) return { error: error.message };
+      if (data.session && data.user) {
+        cloudUser = mapUser(data.user); cloudStatus = 'on';
+        await cloudSync();
+        return { user: cloudUser };
+      }
+      return { needsConfirmation: true, message: 'Account created — check your inbox and confirm your email to finish signing in.' };
+    },
+    async login(opts) {
+      if (!cloudClient) await cloudInit();
+      const { data, error } = await cloudClient.auth.signInWithPassword({ email: String(opts.email || '').trim(), password: String(opts.password || '') });
+      if (error) return { error: error.message };
+      cloudUser = mapUser(data.user); cloudStatus = 'on';
+      await cloudSync();
+      return { user: cloudUser };
+    },
+    async logout() { try { await cloudClient.auth.signOut(); } catch (e) {} cloudUser = null; },
+    async signOutEverywhere() { await cloudClient.auth.signOut({ scope: 'global' }); cloudUser = null; },
+    async changePassword(opts) {
+      const probe = await cloudClient.auth.signInWithPassword({ email: cloudUser.email, password: String(opts.currentPassword || '') });
+      if (probe.error) return { error: 'Current password is incorrect.' };
+      const { error } = await cloudClient.auth.updateUser({ password: String(opts.newPassword || '') });
+      if (error) return { error: validatePassword(opts.newPassword) || error.message };
+      log('security', 'Password changed');
+      return { user: cloudUser };
+    },
+    async sendReset(email) {
+      if (!cloudClient) await cloudInit();
+      const { error } = await cloudClient.auth.resetPasswordForEmail(String(email || '').trim(), { redirectTo: authPageUrl() });
+      return error ? { error: error.message } : { ok: true };
+    },
+    current() { return cloudUser; }
+  };
+
   function toCSV(rows) {
     return rows.map((r) => r.map((c) => {
       const s = String(c == null ? '' : c);
@@ -466,21 +765,32 @@ window.Store = (function () {
   }
 
   function boot() {
-    if (!load()) seed();
+    if (!load()) blank();
     runAutomations(true);
     save();
   }
-  function resetDemo() { seed(); }
+  function resetDemo() { demoData(); }
 
   return {
     get db() { return db; },
     set db(v) { db = v; },
-    save, boot, resetDemo, seed,
-        Auth: { signup, login, logout, current, changePassword, count: () => getUsers().length, list: () => getUsers().map(publicUser), __sha256: sha256 },
-    CURRENCIES, CATEGORIES, PAY_METHODS, STATUS_LABEL,
+    save, boot, resetDemo, loadDemo: demoData,
+        /* Auth: local is sync (tests + UI call sites read .user directly);
+           cloud is async and exposed under Auth.cloudAuth for cloud mode. */
+        Auth: {
+          signup, login, logout, current, changePassword,
+          sendReset: () => Promise.resolve({ error: 'Password reset needs cloud sync — enable it in Settings first.' }),
+          count: () => getUsers().length,
+          list: () => getUsers().map(publicUser),
+          cloudAuth,
+          __sha256: sha256
+        },
+    cloud: { init: cloudInit, sync: cloudSync, enabled: cloudOn, hasConflict: hasConflictArchive, restoreConflict: cloudRestoreConflict, discardConflict: cloudDiscardConflict, downloadConflict: cloudExportConflict, lastSync: cloudLastSync, lastAction: () => cloudLastAction, lastError: () => cloudLastError, status: () => cloudStatus },
+    CURRENCIES, CATEGORIES, PAY_METHODS, STATUS_LABEL, CLOUD_URL: DEFAULT_CLOUD_URL, CLOUD_ANON: DEFAULT_CLOUD_ANON,
     uid, num, pad, iso, todayISO, addDays, addMonths, daysBetween, fmtDate, fmtDateTime, monthKey, monthLabel, fmtMoney, esc,
     getClient, getInvoice, computeTotals, displayStatus, newInvoiceNumber, log,
     runAutomations, recordPayment, markSent, markViewed, receiptNumber,
+    createPaymentLink, syncPayments,
     lastMonths, moneyByMonth, kpis, toCSV, download
   };
 })();

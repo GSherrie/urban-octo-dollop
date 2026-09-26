@@ -16,11 +16,21 @@
     const act = S.db.activity.slice(0, 7);
     const actIcon = { paid: ['wallet', 'var(--green-soft)', 'var(--green-dark)'], receipt: ['file', 'var(--green-soft)', 'var(--green-dark)'], viewed: ['eye', 'var(--violet-soft)', '#5B4BD1'], sent: ['send', 'var(--blue-soft)', '#0662C4'], reminder: ['bell', 'var(--amber-soft)', '#A56A00'], recurring: ['repeat', 'var(--blue-soft)', '#0662C4'], scan: ['scan', 'var(--blue-soft)', '#0662C4'] };
 
+    const blankWorkspace = !S.db.clients.length && !S.db.invoices.length && !S.db.expenses.length;
     return {
       title: 'Dashboard',
       sub: 'Business health at a glance — ' + new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }),
       topActions: '<button class="btn ghost" data-action="scan">' + icon('scan') + '<span class="hide-sm">Scan receipt</span></button><button class="btn primary" data-action="new-invoice">' + icon('plus') + 'New invoice</button>',
       html:
+        (blankWorkspace ?
+          '<div class="card mt2" style="border:2px dashed var(--line)"><div class="card-b" style="text-align:center;padding:34px 20px">' +
+            '<h2 style="font-size:20px;letter-spacing:-.3px;margin-bottom:6px">Welcome to SherPay</h2>' +
+            '<p class="small muted" style="max-width:430px;margin:0 auto 16px">This is your real workspace — nothing is pre-filled. Add your business details, then create your first invoice. Or explore the app with sample data first.</p>' +
+            '<div class="row" style="gap:10px;justify-content:center;flex-wrap:wrap">' +
+              '<button class="btn primary" data-action="go-clients">' + icon('clients') + 'Add a client</button>' +
+              '<button class="btn ghost" data-action="load-demo">' + icon('play') + 'Explore with sample data</button>' +
+            '</div>' +
+          '</div></div>' : '') +
         '<div class="grid kpis">' +
           '<div class="card kpi accent-blue"><div class="lab">' + icon('wallet') + 'Outstanding</div><div class="val">' + S.fmtMoney(k.outstanding, cur) + '</div><div class="delta">' + outstanding.length + ' open invoice' + (outstanding.length === 1 ? '' : 's') + '</div></div>' +
           '<div class="card kpi accent-green"><div class="lab">' + icon('check') + 'Collected this month</div><div class="val">' + S.fmtMoney(k.paidMonth, cur) + '</div><div class="delta">across all currencies (base ' + cur + ')</div></div>' +
@@ -48,6 +58,8 @@
         '</div>',
       actions: {
         'new-invoice': () => { location.hash = '#/invoices/new'; },
+        'go-clients': () => { location.hash = '#/clients'; },
+        'load-demo': () => UI.confirmDialog('Explore with sample data?', 'Replaces this workspace with example clients, invoices and expenses so you can look around. You can start fresh again afterwards by deleting the sample items.', () => { S.resetDemo(); UI.toast('Sample data loaded', 'green', 'sync'); UI.render(); }, 'Load sample'),
         scan: () => UI.VIEWS.expenses.__scan(),
         'open-invoice': (d) => { location.hash = '#/i/' + d.id; }
       }
@@ -125,7 +137,7 @@
     const link = location.href.split('#')[0] + '#/i/' + inv.id;
     UI.openModal({
       title: 'Send ' + inv.number,
-      body: '<p class="small muted mb">Deliver a secure pay-link to <b>' + esc(c ? c.name : 'client') + '</b> — ' + S.fmtMoney(t.balance, inv.currency) + ' due. Opening the link marks the invoice <b>Viewed</b>; paying flips it to <b>Paid</b> and auto-issues a receipt.</p>' +
+      body: '<p class="small muted mb">Deliver a pay-link to <b>' + esc(c ? c.name : 'client') + '</b> — ' + S.fmtMoney(t.balance, inv.currency) + ' due. Opening the link marks the invoice <b>Viewed</b>; paying flips it to <b>Paid</b> and auto-issues a receipt.</p>' +
         '<div class="grid" style="gap:9px">' +
         '<button class="method on" data-action="ch" data-m="Email"><span class="mico" style="background:#0B7CFF">' + icon('mail') + '</span><span><b>Email</b><div class="tiny muted">' + esc(c ? c.email : '') + ' · branded pay-link + PDF</div></span></button>' +
         '<button class="method" data-action="ch" data-m="WhatsApp"><span class="mico" style="background:#25D366">' + icon('msg') + '</span><span><b>WhatsApp</b><div class="tiny muted">Share invoice link in chat</div></span></button>' +
@@ -183,7 +195,7 @@
 
     return {
       title: inv.number,
-      sub: 'Client view · secure pay-link',
+      sub: 'Client view · pay-link',
       topActions: '<button class="btn ghost" data-action="back">' + icon('chevron', 'flip') + '<span class="hide-sm">Back</span></button><button class="btn ghost" data-action="edit">' + icon('edit') + '<span class="hide-sm">Edit</span></button><button class="btn ghost" data-action="pdf">' + icon('print') + '<span class="hide-sm">PDF</span></button>' + (st !== 'paid' && st !== 'draft' ? '<button class="btn green" data-action="pay">' + icon('wallet') + '<span class="hide-sm">Payment</span></button>' : ''),
       html:
         '<div class="paper font-' + tpl.font + ' acc-' + tpl.accent + '" id="paper">' +
@@ -224,25 +236,53 @@
   function clientPayModal(id) {
     const inv = S.getInvoice(id); if (!inv) return;
     const t = S.computeTotals(inv);
+    const cfg = S.db.settings.payments || {};
+    const live = !!(cfg.paystackPublicKey);
+    const body = live ?
+      '<p class="small muted mb">Send your client a secure hosted checkout. They pay by card, bank transfer or mobile money via <b>Paystack</b>; the payment is verified server-side and this invoice is marked <b>Paid</b> automatically with a receipt.</p>' +
+      '<div class="card card-b" style="background:var(--bg)"><div class="row small"><span class="muted" style="flex:1">Amount due</span><b class="tnum">' + S.fmtMoney(t.balance, inv.currency) + '</b></div>' +
+      '<div class="row small"><span class="muted" style="flex:1">Client</span><b>' + esc((S.getClient(inv.clientId) || {}).name || '—') + '</b></div>' +
+      '<div class="row small"><span class="muted" style="flex:1">Gateway</span><b>Paystack (' + esc(cfg.mode || 'live') + ')</b></div></div>' :
+      '<p class="small muted mb">Record a payment received outside the app (cash, bank transfer, mobile money) or set up hosted online checkout in Settings ▸ Payments.</p>' +
+      '<div class="grid" style="gap:8px" id="cp-methods">' + S.PAY_METHODS.map((p) => '<button class="method" data-m="' + p.id + '"><span class="mico" style="background:' + p.color + '">' + p.tag + '</span><span><b>' + p.label + '</b><div class="tiny muted">' + p.note + '</div></span></button>').join('') + '</div>' +
+      '<div class="fgrid c2 mt"><div><label class="f">Amount received</label><input id="cp-amt" class="input" type="number" step="0.01" value="' + t.balance + '"></div><div style="display:flex;align-items:flex-end"><button class="btn ghost" id="cp-deposit" style="width:100%">50% deposit</button></div></div>';
     UI.openModal({
-      title: 'Checkout — ' + S.fmtMoney(t.balance, inv.currency),
-      body: '<p class="small muted mb">Demo gateway — Stripe, PayPal, Apple Pay, Mobile Money & bank transfer are simulated end-to-end.</p>' +
-        '<div class="grid" style="gap:8px" id="cp-methods">' + S.PAY_METHODS.map((p, ix) => '<button class="method' + (ix === 0 ? ' on' : '') + '" data-m="' + p.id + '"><span class="mico" style="background:' + p.color + '">' + p.tag + '</span><span><b>' + p.label + '</b><div class="tiny muted">' + p.note + '</div></span></button>').join('') + '</div>' +
-        '<div class="fgrid c2 mt"><div><label class="f">Pay amount</label><input id="cp-amt" class="input" type="number" step="0.01" value="' + t.balance + '"></div><div style="display:flex;align-items:flex-end"><button class="btn ghost" id="cp-deposit" style="width:100%">50% deposit</button></div></div>',
-      footer: '<button class="btn ghost" data-action="close-modal">Cancel</button><button class="btn green" id="cp-pay" style="padding:11px 22px">' + icon('lock') + 'Pay securely</button>',
+      title: (live ? 'Get paid — ' : 'Record payment — ') + S.fmtMoney(t.balance, inv.currency),
+      body,
+      footer: live ?
+        '<button class="btn ghost" data-action="close-modal">Cancel</button><button class="btn primary" id="cp-link" style="padding:11px 22px">' + icon('link') + 'Create payment link</button>' :
+        '<button class="btn ghost" data-action="close-modal">Cancel</button><button class="btn green" id="cp-pay" style="padding:11px 22px">' + icon('check') + 'Record payment</button>',
       mount: (m) => {
+        if (live) {
+          m.querySelector('#cp-link').addEventListener('click', async () => {
+            const btn = m.querySelector('#cp-link'); btn.disabled = true; btn.innerHTML = 'Creating…';
+            try {
+              const link = await S.createPaymentLink(inv.id);
+              UI.closeModal();
+              UI.copyText(link).then(() => {});
+              UI.openModal({
+                title: 'Payment link ready',
+                body: '<p class="small muted mb">Send this link to your client. When they pay, the invoice is marked <b>Paid</b> automatically and a receipt is issued on your next app open.</p>' +
+                  '<div class="card card-b" style="word-break:break-all;font-size:12.5px;background:var(--bg)"><a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(link) + '</a></div>',
+                footer: '<button class="btn ghost" data-action="close-modal">Close</button><button class="btn primary" id="cp-copy">' + icon('copy') + 'Copy link</button>',
+                mount: (m2) => m2.querySelector('#cp-copy').addEventListener('click', () => UI.copyText(link).then((ok) => UI.toast(ok ? 'Link copied' : 'Copy blocked', ok ? 'green' : 'red', 'link')))
+              });
+            } catch (e) {
+              btn.disabled = false; btn.innerHTML = icon('link') + 'Create payment link';
+              UI.toast('Could not create link: ' + (e && e.message || 'check Settings ▸ Payments'), 'red');
+            }
+          });
+          return;
+        }
         let method = S.PAY_METHODS[0].id;
         m.querySelectorAll('#cp-methods .method').forEach((b) => b.addEventListener('click', () => { method = b.dataset.m; m.querySelectorAll('#cp-methods .method').forEach((x) => x.classList.remove('on')); b.classList.add('on'); }));
         m.querySelector('#cp-deposit').addEventListener('click', () => { m.querySelector('#cp-amt').value = (t.balance / 2).toFixed(2); });
         m.querySelector('#cp-pay').addEventListener('click', () => {
-          const btn = m.querySelector('#cp-pay'); btn.disabled = true; btn.innerHTML = 'Processing…';
-          setTimeout(() => {
-            const res = S.recordPayment(inv.id, m.querySelector('#cp-amt').value, method);
-            UI.closeModal();
-            if (!res) { UI.toast('Payment failed — check amount', 'red'); UI.render(); return; }
-            UI.toast(res.receipt ? 'Payment successful — receipt ' + res.receipt + ' emailed' : 'Partial payment received', 'green', 'check');
-            UI.render();
-          }, 900);
+          const res = S.recordPayment(inv.id, m.querySelector('#cp-amt').value, method);
+          UI.closeModal();
+          if (!res) { UI.toast('Payment failed — check amount', 'red'); UI.render(); return; }
+          UI.toast(res.receipt ? 'Paid in full — receipt ' + res.receipt : 'Partial payment recorded', 'green', 'check');
+          UI.render();
         });
       }
     });

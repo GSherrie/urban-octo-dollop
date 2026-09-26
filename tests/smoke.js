@@ -35,6 +35,7 @@ for (const f of files) vm.runInThisContext(fs.readFileSync(WEB + '/' + f, 'utf8'
 
 const S = global.Store, UI = global.UI;
 S.boot();
+if (S.resetDemo) S.resetDemo(); // sample dataset so every route has content
 // auth gate: create + sign in before rendering routes
 const su = S.Auth.signup({ name: 'Smoke Tester', email: 'smoke@sherpay.app', password: 'password123' });
 if (!su.user) { console.log('signup failed: ' + su.error); process.exit(1); }

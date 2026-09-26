@@ -29,6 +29,11 @@ let pass = 0, fail = 0;
 const check = (name, cond) => { if (cond) { pass++; console.log('  ok  ' + name); } else { fail++; console.log('  FAIL ' + name); } };
 
 (async () => {
+  console.log('-- fresh workspace: blank start + sample data loader');
+  check('fresh workspace is blank', S.db.invoices.length === 0 && S.db.clients.length === 0);
+  S.resetDemo(); // sample dataset for the interaction flows below
+  check('sample data loaded for flows', S.db.invoices.length > 0);
+
   console.log('-- editor: add/remove line items, totals, save');
   nav('#/invoices/new');
   check('editor renders 1 item row', $$('#ed-items tr').length === 1);
@@ -109,8 +114,8 @@ const check = (name, cond) => { if (cond) { pass++; console.log('  ok  ' + name)
   const dark = $$('#view .theme-chip')[1];
     click(dark);
   check('dark theme applied', S.db.settings.preferences.theme === 'dark');
-  const tgl = $$('#view .chip.toggle[data-toggle]')[0];
-  const k = tgl.dataset.toggle;
+  const tgl = $$('#view .switch[data-toggle] input')[0];
+  const k = tgl.closest('.switch').dataset.toggle;
   const notifBefore = S.db.settings.notifications[k];
   click(tgl);
   check('notification toggled', S.db.settings.notifications[k] !== notifBefore);
@@ -123,6 +128,7 @@ const check = (name, cond) => { if (cond) { pass++; console.log('  ok  ' + name)
 
   console.log('-- auth: logout -> login screen -> login');
   click($('.uc-out'));
+  await sleep(50); // signOut() awaits logout (async) before rendering the auth screen
   check('login screen shown after sign out', !!$('#auth-card') && $('#auth-card').innerHTML.includes('Welcome back'));
   check('wrong password rejected', !!S.Auth.login({ email: 'qa@sherpay.app', password: 'nope' }).error);
   check('login restores session', !!S.Auth.login({ email: 'qa@sherpay.app', password: 'password123', remember: true }).user);

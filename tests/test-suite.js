@@ -34,6 +34,15 @@ const check = (name, cond) => { if (cond) { pass++; } else { fail++; console.log
 const section = (n) => console.log('— ' + n);
 
 (async () => {
+  section('fresh start (no demo data)');
+  check('fresh install is blank', S.db.invoices.length === 0 && S.db.clients.length === 0 && S.db.expenses.length === 0);
+  nav('#/dashboard');
+  check('welcome card shown on blank workspace', $('#view').textContent.includes('Welcome to SherPay'));
+  check('sample-data loader offered', !!$('[data-action="load-demo"]'));
+  click($('[data-action="load-demo"]'));
+  click($('#cf-yes'));
+  check('sample data loads on demand', S.db.invoices.length > 0 && S.db.clients.length > 0);
+
   section('dashboard');
   nav('#/dashboard');
   check('4 KPI cards', $$('.kpi').length === 4);
@@ -238,10 +247,10 @@ const section = (n) => console.log('— ' + n);
   check('3 theme chips rendered', themeChips.length === 3);
   click(themeChips[1]);
   check('dark theme persisted', S.db.settings.preferences.theme === 'dark');
-  // notification toggle
-  const toggles = $$('#view .chip.toggle[data-toggle]');
+  // notification toggle (accessible switch: checkbox input inside .switch)
+  const toggles = $$('#view .switch[data-toggle] input');
   check('notification toggles present', toggles.length > 0);
-  const toggleKey = toggles[0].dataset.toggle;
+  const toggleKey = toggles[0].closest('.switch').dataset.toggle;
   const before = S.db.settings.notifications[toggleKey];
   click(toggles[0]);
   check('notification toggled persisted', S.db.settings.notifications[toggleKey] !== before);

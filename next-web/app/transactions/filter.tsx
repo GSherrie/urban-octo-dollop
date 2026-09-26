@@ -7,7 +7,7 @@ import { paymentMethodLabel } from "@/lib/constants";
 import { EmptyState } from "@/components/feedback";
 import { ButtonLink } from "@/components/ui";
 import { cn } from "@/lib/cn";
-type Row = { id: string; type: string; amount: number; category: string | null; date: string; payment_method: string | null };
+type Row = { id: string; type: string; amount: number; category: string | null; date: string; payment_method: string | null; note: string | null };
 export default function TxFilter({ type, q, rows, currency }: { type: string; q: string; rows: Row[]; currency: string }) {
   const router = useRouter();
   const [term, setTerm] = useState(q);
@@ -26,8 +26,8 @@ export default function TxFilter({ type, q, rows, currency }: { type: string; q:
           ))}
         </div>
         <form className="flex-1" onSubmit={(e) => { e.preventDefault(); go(type); }}>
-          <label htmlFor="tx-search" className="sr-only">Search by category</label>
-          <input id="tx-search" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search by category" className="sp-input" />
+          <label htmlFor="tx-search" className="sr-only">Search by description or category</label>
+          <input id="tx-search" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search description or category" className="sp-input" />
         </form>
       </div>
       {rows.length === 0 ? (
@@ -37,7 +37,7 @@ export default function TxFilter({ type, q, rows, currency }: { type: string; q:
           {rows.map((r) => (
             <li key={r.id} className="flex items-center gap-3 px-4 py-3">
               <span aria-hidden="true" className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${r.type === "expense" ? "bg-danger-soft text-danger" : "bg-success-soft text-success"}`}>{r.type === "expense" ? <ArrowUpRight className="h-4 w-4 rotate-90" /> : <ArrowDownLeft className="h-4 w-4" />}</span>
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{r.category || "Uncategorised"}</p><p className="truncate text-[13px] text-ink-tertiary">{r.type === "income" ? "Income" : "Expense"} · {formatDate(r.date)} · {paymentMethodLabel(r.payment_method)}</p></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{r.note || r.category || "Uncategorised"}{r.note && r.category ? <span className="ml-1.5 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{r.category}</span> : null}</p><p className="truncate text-[13px] text-ink-tertiary">{r.type === "income" ? "Income" : "Expense"} · {formatDate(r.date)} · {paymentMethodLabel(r.payment_method)}</p></div>
               <span className={`sp-tabular shrink-0 text-sm font-semibold ${r.type === "income" ? "text-success" : "text-ink"}`}>{r.type === "income" ? "+" : "−"}{formatMoney(r.amount, currency)}</span>
             </li>
           ))}

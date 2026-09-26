@@ -6,8 +6,8 @@ import { ButtonLink } from "@/components/ui";
 import { EmptyState } from "@/components/feedback";
 import { formatDate, formatMoney, monthKey, todayISO } from "@/lib/format";
 import { paymentMethodLabel } from "@/lib/constants";
-export type Row = { id: string; type: string; amount: number; category: string | null; date: string; payment_method: string | null };
-export default function DashboardClient({ profile, rows }: { profile: { currency?: string | null; full_name?: string | null } | null; rows: Row[] }) {
+export type Row = { id: string; type: string; amount: number; category: string | null; date: string; payment_method: string | null; reference_id: string | null };
+export default function DashboardClient({ profile, rows, notes }: { profile: { currency?: string | null; full_name?: string | null } | null; rows: Row[]; notes: Record<string, string> }) {
   const currency = profile?.currency || "GHS";
   const mk = monthKey(todayISO());
   const sum = (t: string, m?: string) => rows.filter((r) => r.type === t && (!m || r.date.slice(0, 7) === m)).reduce((s, r) => s + Number(r.amount || 0), 0);
@@ -52,7 +52,7 @@ export default function DashboardClient({ profile, rows }: { profile: { currency
             {recent.map((r) => (
               <li key={r.id} className="flex items-center gap-3 px-4 py-3">
                 <span aria-hidden="true" className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${r.type === "expense" ? "bg-danger-soft text-danger" : "bg-success-soft text-success"}`}>{r.type === "expense" ? <ArrowUpRight className="h-4 w-4 rotate-90" /> : <ArrowDownLeft className="h-4 w-4" />}</span>
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{r.category || "Uncategorised"}</p><p className="truncate text-[13px] text-ink-tertiary">{formatDate(r.date)} · {paymentMethodLabel(r.payment_method)}</p></div>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{notes[r.id] || r.category || "Uncategorised"}{notes[r.id] && r.category ? <span className="ml-1.5 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{r.category}</span> : null}</p><p className="truncate text-[13px] text-ink-tertiary">{formatDate(r.date)} · {paymentMethodLabel(r.payment_method)}</p></div>
                 <span className={`sp-tabular shrink-0 text-sm font-semibold ${r.type === "income" ? "text-success" : "text-ink"}`}>{r.type === "income" ? "+" : "−"}{formatMoney(r.amount, currency)}</span>
               </li>
             ))}

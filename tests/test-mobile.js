@@ -15,7 +15,8 @@ const w = dom.window;
 setTimeout(() => {
   let fail = 0;
   const check = (n, c) => { console.log((c ? '  ok  ' : (fail++, '  FAIL ')) + n); };
-  check('Store booted with seed data', !!w.Store && w.Store.db.invoices.length > 0);
+  check('Store booted with a blank workspace (no fake data)', !!w.Store && w.Store.db.invoices.length === 0 && w.Store.db.clients.length === 0);
+  w.Store.resetDemo(); // sample dataset for the route checks below
   // auth gate: create + sign in, then re-render the shell
   const su = w.Store.Auth.signup({ name: 'Mobile QA', email: 'mobile@sherpay.app', password: 'password123' });
   check('signup works in single-file build', !!su.user);

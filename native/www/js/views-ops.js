@@ -192,14 +192,14 @@
       title: 'Scan a receipt (OCR)',
       wide: true,
       body: '<div class="grid half" style="gap:18px">' +
-        '<div><div class="scan-frame" id="scan-frame"><div class="scan-corners"><i></i><i></i><i></i><i></i></div><div id="scan-msg" style="color:#9FD8FF;font-size:13px;font-weight:600;text-align:center;padding:0 20px">Point your camera at a receipt,<br>or upload a photo / PDF</div></div>' +
+        '<div><div class="scan-frame" id="scan-frame"><div class="scan-corners"><i></i><i></i><i></i><i></i></div><div id="scan-msg" style="color:#BFE0FF;font-size:13px;font-weight:600;text-align:center;padding:0 20px">Point your camera at a receipt,<br>or upload a photo / PDF</div></div>' +
         '<div class="row mt" style="gap:8px;flex-wrap:wrap">' +
           '<label class="btn primary" style="flex:1;cursor:pointer">' + icon('scan') + ' Take photo<input id="scan-cam" type="file" accept="image/*" capture="environment" hidden></label>' +
           (liveSupported ? '<button class="btn ghost" id="scan-live" style="flex:1">' + icon('play') + ' Restart camera</button>' : '') +
           '<label class="btn ghost" style="flex:1;cursor:pointer">' + icon('file') + ' Upload<input id="scan-file" type="file" accept="image/*,application/pdf" hidden></label>' +
           '<button class="btn ghost" id="scan-demo">' + icon('play') + '<span class="hide-sm"> Demo</span></button>' +
         '</div>' +
-        '<p class="hint">“Take photo” opens your rear camera directly. “Live camera” streams the viewfinder here and captures a frame. OCR extracts merchant, date, tax & total. Works offline — syncs when you reconnect.</p></div>' +
+        '<p class="hint">“Take photo” opens your rear camera directly. “Live camera” streams the viewfinder here and captures a frame. This demo build fills in sample expense fields so you can try the flow — check and edit them on the next step. Works offline.</p></div>' +
         '<div><label class="f">Extracted fields</label><div id="scan-out" class="grid" style="gap:9px"><div class="empty small">Waiting for scan…</div></div></div>' +
         '</div>',
       footer: '<button class="btn ghost" data-action="close-modal">Cancel</button><button class="btn primary" id="scan-use" disabled>' + icon('check') + 'Use extracted data</button>',
@@ -212,7 +212,7 @@
         mo.observe(document.getElementById('modal-root'), { childList: true });
         function runScan(imgDataUrl, fileName, att) {
           stopLive();
-          frame.innerHTML = (imgDataUrl ? '<img src="' + imgDataUrl + '" alt="">' : '') + '<div class="scan-line"></div><div class="scan-corners"><i></i><i></i><i></i><i></i></div>';
+          frame.innerHTML = (imgDataUrl ? '<img src="' + imgDataUrl + '" alt="Receipt photo preview">' : '') + '<div class="scan-line"></div><div class="scan-corners"><i></i><i></i><i></i><i></i></div>';
           out.innerHTML = '<div class="empty small">Extracting merchant, date, tax, total…</div>';
           use.disabled = true;
           setTimeout(() => {
@@ -221,8 +221,8 @@
             out.innerHTML = '<div class="card" style="box-shadow:none"><div class="card-b grid" style="gap:7px">' +
               [['Merchant', guess.merchant], ['Date', S.fmtDate(guess.date)], ['Category', guess.category], ['Tax', S.fmtMoney(guess.tax, S.db.settings.currency)], ['Total', S.fmtMoney(guess.total, S.db.settings.currency)]]
                 .map((r) => '<div class="row small"><span class="muted" style="width:76px">' + r[0] + '</span><b>' + esc(String(r[1])) + '</b></div>').join('') +
-              '<div class="tiny" style="color:var(--green-dark)">' + icon('check') + ' Confidence 94% · editable on next step</div></div></div>';
-            frame.innerHTML = (imgDataUrl ? '<img src="' + imgDataUrl + '" alt="">' : '<div style="color:#9FD8FF;font-size:13px;font-weight:600">✓ Scan complete</div>') + '<div class="scan-corners"><i></i><i></i><i></i><i></i></div>';
+              '<div class="tiny" style="color:var(--green-dark)">' + icon('check') + ' Sample fields — check &amp; edit on the next step</div></div></div>';
+            frame.innerHTML = (imgDataUrl ? '<img src="' + imgDataUrl + '" alt="Receipt photo preview">' : '<div style="color:#BFE0FF;font-size:13px;font-weight:600">✓ Scan complete</div>') + '<div class="scan-corners"><i></i><i></i><i></i><i></i></div>';
             use.disabled = false;
             use.onclick = () => { UI.closeModal(); expenseModal(guess); };
           }, 1700);

@@ -7,7 +7,7 @@ import type { TxType } from "@/lib/data";
 import { saveTx, validateTx, type TxFormValues } from "@/lib/tx";
 import { Alert } from "@/components/alert";
 import { FieldError, FormHint } from "@/components/ui";
-export default function TxForm({ type, editId, initial }: { type: TxType; editId?: string; initial?: Partial<TxFormValues> }) {
+export default function TxForm({ type, editId, currency = "GHS", initial }: { type: TxType; editId?: string; currency?: string; initial?: Partial<TxFormValues> }) {
   const router = useRouter();
   const cats = type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
   const [v, setV] = useState<TxFormValues>({ amount: initial?.amount ?? "", category: initial?.category ?? "", detail: initial?.detail ?? "", date: initial?.date ?? todayISO(), method: initial?.method ?? "" });
@@ -32,7 +32,7 @@ export default function TxForm({ type, editId, initial }: { type: TxType; editId
     <form onSubmit={submit} noValidate className="sp-card sp-card-pad space-y-4">
       {top ? <Alert tone="error">{top}</Alert> : null}
       <div>
-        <label className="sp-label" htmlFor="tx-amount">Amount (GHS)</label>
+        <label className="sp-label" htmlFor="tx-amount">Amount ({currency})</label>
         <input id="tx-amount" inputMode="decimal" autoComplete="off" placeholder="0.00" value={v.amount} onChange={set("amount")} aria-invalid={!!errs.amount || undefined} className="sp-input sp-tabular text-lg font-semibold" />
         {errs.amount ? <FieldError>{errs.amount}</FieldError> : <FormHint>Enter the {isExp ? "amount spent" : "amount received"}.</FormHint>}
       </div>

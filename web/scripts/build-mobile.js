@@ -1,5 +1,7 @@
 /* Builds SherPay-mobile.html: the whole app (CSS + JS + logo) inlined into one offline file.
-   Usage: node scripts/build-mobile.js  ->  ../SherPay-mobile.html */
+   Usage: node scripts/build-mobile.js  ->  ../SherPay-mobile.html
+   Note: js/pay.js is the standalone public-checkout page (pay.html) and is NOT
+   inlined here — it ships alongside in dist/www builds via sync-www.js. */
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');

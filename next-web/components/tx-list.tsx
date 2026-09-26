@@ -35,7 +35,7 @@ export default function TxList({ type, rows, currency, newHref, newLabel, emptyT
               <ArrowUpRight className={`h-4 w-4 ${type === "income" ? "rotate-[270deg]" : "rotate-90"}`} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-ink">{r.category || "Uncategorised"}</p>
+              <p className="truncate text-sm font-medium text-ink">{r.note || r.category || "Uncategorised"}{r.note && r.category ? <span className="ml-1.5 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-secondary">{r.category}</span> : null}</p>
               <p className="truncate text-[13px] text-ink-tertiary">{formatDate(r.date)} · {paymentMethodLabel(r.payment_method)}</p>
             </div>
             <span className={`sp-tabular shrink-0 text-sm font-semibold ${type === "income" ? "text-success" : "text-ink"}`}>{type === "income" ? "+" : "−"}{formatMoney(r.amount, currency)}</span>

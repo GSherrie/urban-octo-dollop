@@ -9,6 +9,7 @@ export interface TxRow {
   date: string;
   payment_method: string | null;
   reference_id?: string | null;
+  note?: string | null;
 }
 export interface ProfileRow {
   id: string;

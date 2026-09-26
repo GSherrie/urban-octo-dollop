@@ -20,6 +20,7 @@ for (const f of ['js/store.js', 'js/ui.js', 'js/views-auth.js', 'js/views-main.j
   w.eval(fs.readFileSync(WEB + '/' + f, 'utf8'));
 const S = w.Store, UI = w.UI;
 S.boot();
+if (S.resetDemo) S.resetDemo(); // sample dataset for the debug audit
 if (!S.Auth.current()) S.Auth.signup({ name: 'Audit', email: 'audit@sherpay.app', password: 'password123' });
 UI.start();
 w.location.hash = '#/i/i4'; UI.render(true);

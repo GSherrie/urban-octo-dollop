@@ -73,9 +73,31 @@ window.UI = (function () {
     document.addEventListener('click', onDocClick);
     touchAssist();
     dragAssist();
-    window.addEventListener('online', () => { toast('Back online — changes synced', 'green', 'sync'); setOnline(); });
+    window.addEventListener('online', () => { toast('Back online', 'green', 'sync'); setOnline(); });
     window.addEventListener('offline', () => { toast('Offline mode — drafts saved locally', 'amber', 'alert'); setOnline(); });
+    dataNotice();
     render();
+  }
+
+  /* ---------------- first-run transparency notice ----------------
+     SherPay uses no cookies or trackers, but it does keep your data in
+     browser local storage. One-time notice (dismissal remembered) so
+     visitors know exactly what is stored on their device. */
+  function dataNotice() {
+    let seen = true;
+    try { seen = localStorage.getItem('sherpay_notice_v1') === '1'; } catch (e) {}
+    if (seen) return;
+    const el = document.createElement('div');
+    el.className = 'legal-notice';
+    el.setAttribute('role', 'status');
+    el.innerHTML =
+      '<div class="ln-txt"><b>Your data stays on this device.</b><span>SherPay sets no cookies and loads no trackers — it saves your invoices and settings in this browser’s local storage so the app works offline. See the Privacy Policy in Account → About.</span></div>' +
+      '<button class="btn sm primary" id="ln-ok">Got it</button>';
+    document.body.appendChild(el);
+    el.querySelector('#ln-ok').addEventListener('click', () => {
+      try { localStorage.setItem('sherpay_notice_v1', '1'); } catch (e) {}
+      el.remove();
+    });
   }
 
   /* ---------------- auth gate ----------------
@@ -94,8 +116,8 @@ window.UI = (function () {
     document.title = 'SherPay — Log in or sign up';
   }
 
-  function signOut() {
-    S.Auth.logout();
+  async function signOut() {
+    await S.Auth.logout();
     closeModal();
     toast('Signed out — see you soon!', 'green', 'lock');
     renderAuth();
@@ -118,7 +140,7 @@ window.UI = (function () {
 
   function setOnline() {
     const el = document.getElementById('online-ind');
-    if (el) { el.classList.toggle('off', !navigator.onLine); el.querySelector('span').textContent = navigator.onLine ? 'Cloud sync on' : 'Offline — stored on device'; }
+    if (el) { el.classList.toggle('off', !navigator.onLine); el.querySelector('span').textContent = navigator.onLine ? 'You are online — saved on this device' : 'Offline — saved on this device'; }
   }
 
   function render(force) {
@@ -144,7 +166,7 @@ window.UI = (function () {
           (n.route === 'invoices' ? '<span class="pill">' + S.db.invoices.filter((i) => ['sent', 'viewed'].includes(S.displayStatus(i)) || S.displayStatus(i) === 'overdue' || S.displayStatus(i) === 'partial').length + '</span>' : '') +
           '</button>').join('') + '</nav>' +
         '<div class="side-foot">' +
-          '<div class="online-dot" id="online-ind"><i></i><span>Cloud sync on</span></div>' +
+          '<div class="online-dot" id="online-ind"><i></i><span>Connection status</span></div>' +
           '<div class="user-chip" id="user-chip">' + avatar(S.Auth.current().name) +
             '<div class="uc-meta"><b>' + S.esc(S.Auth.current().name) + '</b><span>' + S.esc(S.Auth.current().email) + '</span></div>' +
             '<button class="uc-out" data-action="signout" title="Sign out" aria-label="Sign out">' + icon('lock') + '</button>' +
@@ -320,16 +342,36 @@ window.UI = (function () {
   /* ---------------- modal ---------------- */
   function openModal(opts) {
     const root = document.getElementById('modal-root');
-    root.innerHTML = '<div class="modal-backdrop" data-backdrop="1"><div class="modal ' + (opts.wide ? 'wide' : '') + '">' +
-      '<div class="modal-h"><h3>' + opts.title + '</h3><div class="spacer"></div><button class="btn icon ghost" data-action="close-modal">' + icon('x') + '</button></div>' +
+    root.innerHTML = '<div class="modal-backdrop" data-backdrop="1"><div class="modal ' + (opts.wide ? 'wide' : '') + '" role="dialog" aria-modal="true" aria-label="' + String(opts.title || 'Dialog').replace(/<[^>]*>/g, '') + '">' +
+      '<div class="modal-h"><h3>' + opts.title + '</h3><div class="spacer"></div><button class="btn icon ghost" data-action="close-modal" aria-label="Close dialog">' + icon('x') + '</button></div>' +
       '<div class="modal-b">' + opts.body + '</div>' +
       (opts.footer === '' ? '' : '<div class="modal-f">' + (opts.footer || '<button class="btn ghost" data-action="close-modal">Close</button>') + '</div>') +
       '</div></div>';
     root.querySelector('.modal-backdrop').addEventListener('mousedown', (e) => { if (e.target.dataset.backdrop) closeModal(); });
-    if (opts.mount) opts.mount(root.querySelector('.modal'));
-    return root.querySelector('.modal');
+    /* keyboard support: Escape closes, Tab cycles inside the dialog */
+    lastFocus = document.activeElement;
+    const modal = root.querySelector('.modal');
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); closeModal(); }
+      else if (e.key === 'Tab') {
+        const f = Array.prototype.filter.call(modal.querySelectorAll('button,input,select,textarea,a[href],[tabindex]'), (el) => !el.disabled && el.offsetParent !== null);
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+    const focusable = modal.querySelector('input,select,textarea,button:not([data-action="close-modal"])');
+    if (focusable) focusable.focus();
+    if (opts.mount) opts.mount(modal);
+    return modal;
   }
-  function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+  let lastFocus = null;
+  function closeModal() {
+    document.getElementById('modal-root').innerHTML = '';
+    /* return keyboard focus to the element that opened the dialog */
+    try { if (lastFocus && document.contains(lastFocus)) { lastFocus.focus(); lastFocus = null; } } catch (e) {}
+  }
   function confirmDialog(title, message, onYes, yesLabel) {
     openModal({
       title, body: '<p class="muted">' + message + '</p>',
