@@ -157,9 +157,9 @@
         '<div class="card card-b settings-list">' +
           row('wallet', 'Currency', 'Used across invoices, reports &amp; budgets',
             '<select id="acc-currency" class="input sm" style="width:auto">' + S.CURRENCIES.map((c) => '<option value="' + c + '"' + (c === cur() ? ' selected' : '') + '>' + c + (SYMBOLS[c] ? ' · ' + SYMBOLS[c] : '') + '</option>').join('') + '</select>') +
-          row('sync', 'Language', 'Interface language (more coming soon)',
+          row('globe', 'Language', 'Interface language (more coming soon)',
             '<select id="acc-lang" class="input sm" style="width:auto">' + [['en', 'English'], ['fr', 'Français'], ['es', 'Español'], ['pt', 'Português']].map((l) => '<option value="' + l[0] + '"' + ((p.lang || 'en') === l[0] ? ' selected' : '') + '>' + l[1] + '</option>').join('') + '</select>') +
-          row('eye', 'Theme', 'Light, dark or follow your device',
+          row('sun', 'Theme', 'Light, dark or follow your device',
             '<span class="row" id="acc-themes" style="gap:6px">' + themeChip('light', 'Light') + themeChip('dark', 'Dark') + themeChip('system', 'System') + '</span>') +
           row('time', 'Start of month', 'When budgets &amp; monthly reports reset',
             '<select id="acc-monthstart" class="input sm" style="width:auto">' + [1, 15].map((d) => '<option value="' + d + '"' + ((p.monthStart || 1) === d ? ' selected' : '') + '>Day ' + d + '</option>').join('') + '</select>') +
@@ -190,7 +190,7 @@
           (s.savingsGoals.length ? s.savingsGoals.map((g, i) => {
             const pct = Math.min(100, Math.round(((g.saved || 0) / (g.target || 1)) * 100));
             return '<div class="row small mb"><span class="muted" style="flex:1">' + esc(g.name) + ' <span class="tiny muted">' + money(g.saved || 0) + ' / ' + money(g.target) + '</span></span>' +
-              '<span class="chip" style="border:none;background:var(--blue-soft);color:#0662C4">' + pct + '%</span>' +
+              '<span class="chip" style="border:none;background:var(--blue-soft);color:var(--on-blue-soft)">' + pct + '%</span>' +
               '<button class="btn icon sm ghost" data-action="del-goal" data-i="' + i + '" title="Remove goal">' + icon('x') + '</button></div>';
           }).join('') : '<div class="empty" style="padding:14px">' + icon('box') + ' <b>No savings goals yet</b></div>') +
           '<button class="btn sm ghost mt w100" data-action="add-goal">' + icon('plus') + ' Add savings goal</button>' +
@@ -212,13 +212,13 @@
       title: 'Data &amp; privacy',
       html:
         '<div class="card card-b settings-list">' +
-          row('sync', 'Cloud sync', S.cloud.enabled() ? 'On — your workspace follows your account on any device' : 'Off — data lives only on this device', '<button class="btn sm ghost" data-action="cloud-sync">' + icon('sync') + 'Sync now</button>') +
-          (S.cloud.hasConflict() ? row('alert', 'Conflicted copy archived', 'A sync conflict kept an older copy safe — download it from Settings ▸ Data', '<span class="chip" style="border:none;background:var(--amber-soft);color:#8F5B00">Review</span>') : '') +
+          row('cloud', 'Cloud sync', S.cloud.enabled() ? 'On — your workspace follows your account on any device' : 'Off — data lives only on this device', '<button class="btn sm ghost" data-action="cloud-sync">' + icon('sync') + 'Sync now</button>') +
+          (S.cloud.hasConflict() ? row('alert', 'Conflicted copy archived', 'A sync conflict kept an older copy safe — download it from Settings ▸ Data', '<span class="chip" style="border:none;background:var(--amber-soft);color:var(--on-amber-soft)">Review</span>') : '') +
           row('download', 'Export transactions', 'All invoices, payments &amp; expenses as CSV', '<button class="btn sm primary" data-action="export-csv">Export</button>') +
           row('print', 'Download financial report', 'Month-by-month P&amp;L summary (CSV)', '<button class="btn sm primary" data-action="export-report">Download</button>') +
-          row('eye', 'Privacy settings', 'Share anonymous usage statistics', toggleChip('analytics')) +
+          row('shield', 'Privacy settings', 'Share anonymous usage statistics', toggleChip('analytics')) +
           row('link', 'Connected services', 'Accounts linked to SherPay', '<span class="chip">None</span>') +
-          row('cloud-off', 'Sign out everywhere', 'End sessions on all other devices for this cloud account', '<button class="btn sm ghost" data-action="signout-all">Sign out</button>') +
+          row('cloudOff', 'Sign out everywhere', 'End sessions on all other devices for this cloud account', '<button class="btn sm ghost" data-action="signout-all">Sign out</button>') +
           row('trash', 'Delete account', 'Permanently remove your account &amp; all data', '<button class="btn sm danger" data-action="delete-account">Delete</button>') +
         '</div>'
     };
@@ -245,13 +245,13 @@
       title: 'About',
       html:
         '<div class="card card-b settings-list">' +
-          row('more', 'App version', 'SherPay for Web &amp; Mobile · build ' + esc(BUILD), '<span class="chip">v' + VERSION + '</span>') +
+          row('info', 'App version', 'SherPay for Web &amp; Mobile · build ' + esc(BUILD), '<span class="chip">v' + VERSION + '</span>') +
           row('sync', 'Check for updates', 'Force this device onto the newest build (your data stays)', '<button class="btn sm primary" data-action="refresh-app">Refresh</button>') +
           row('file', 'Terms of Service', 'The rules for using SherPay', '<button class="btn sm ghost" data-action="tos">View</button>') +
-          row('lock', 'Privacy Policy', 'Your data stays on your device', '<button class="btn sm ghost" data-action="privacy">View</button>') +
-          row('card', 'Cookie Policy', 'No cookies, no trackers — how local storage works', '<button class="btn sm ghost" data-action="cookies">View</button>') +
-          row('more', 'Refund Policy', 'Refunds on SherPay and on invoices you issue', '<button class="btn sm ghost" data-action="refund">View</button>') +
-          row('file', 'Licenses', 'Open-source software we build on', '<button class="btn sm ghost" data-action="licenses">View</button>') +
+          row('shield', 'Privacy Policy', 'Your data stays on your device', '<button class="btn sm ghost" data-action="privacy">View</button>') +
+          row('box', 'Cookie Policy', 'No cookies, no trackers — how local storage works', '<button class="btn sm ghost" data-action="cookies">View</button>') +
+          row('receipt', 'Refund Policy', 'Refunds on SherPay and on invoices you issue', '<button class="btn sm ghost" data-action="refund">View</button>') +
+          row('book', 'Licenses', 'Open-source software we build on', '<button class="btn sm ghost" data-action="licenses">View</button>') +
         '</div>'
     };
   }
@@ -262,7 +262,7 @@
       title: 'Account actions',
       html:
         '<div class="card card-b" style="border-color:var(--red);background:var(--red-soft)">' +
-          '<div class="row"><div class="srow" style="flex:1;color:var(--red)">' + icon('lock') + '<div><b>Log out</b><div class="tiny muted">Sign out of this device</div></div></div><button class="btn sm danger" data-action="logout">Log out</button></div>' +
+          '<div class="row"><div class="srow" style="flex:1;color:var(--red)">' + icon('logout') + '<div><b>Log out</b><div class="tiny muted">Sign out of this device</div></div></div><button class="btn sm danger" data-action="logout">Log out</button></div>' +
         '</div>' +
         '<div class="card card-b mt2" style="border-color:var(--red);background:var(--red-soft)">' +
           '<div class="row"><div class="srow" style="flex:1;color:var(--red)">' + icon('trash') + '<div><b>Delete account</b><div class="tiny muted">Erase every invoice, client, expense &amp; setting on this device</div></div></div><button class="btn sm danger" data-action="delete-account">Delete account</button></div>' +
@@ -270,13 +270,13 @@
         '<div class="tiny muted" style="text-align:center;margin:18px 0 26px">SherPay v' + VERSION + '</div>'
     };
   }
-  /* ================= theme ================= */
-  function applyTheme(t) {
-    prefs().theme = t;
-    S.save();
-    const root = document.documentElement;
-    if (t === 'dark') root.setAttribute('data-theme', 'dark');
-    else root.removeAttribute('data-theme');
+  /* ================= theme =================
+     The palette logic itself now lives in ui.js (UI.applyTheme) so boot and the
+     Account chips share one implementation. This just records the choice, repaints
+     and syncs the chip states. */
+  function setTheme(root, t) {
+    UI.applyTheme(t);
+    root.querySelectorAll('.theme-chip').forEach((c) => c.classList.toggle('active', c.dataset.theme === t));
   }
 
   /* ================= delete account ================= */
@@ -566,7 +566,7 @@
           });
                 },
         'signout-all': async () => {
-          try { await S.Auth.signOutEverywhere(); UI.toast('Other sessions ended — this device stays signed in', 'green', 'cloud-off'); }
+          try { await S.Auth.signOutEverywhere(); UI.toast('Other sessions ended — this device stays signed in', 'green', 'cloudOff'); }
           catch (e) { UI.toast('Could not end other sessions: ' + ((e && e.message) || 'try again'), 'red', 'alert'); }
         },
         'delete-account': () => UI.confirmDialog('Delete your account?', 'This permanently removes all invoices, clients, expenses and settings stored on this device. This cannot be undone.', deleteAccount, 'Delete everything'),
@@ -575,7 +575,12 @@
           UI.toast('Syncing…', 'blue', 'sync');
           try {
             const r = await S.cloud.sync();
-            UI.toast(r.action === 'pushed' ? 'Workspace uploaded' : r.action === 'pulled' ? (r.conflict ? 'Updated — an older copy was archived' : 'Latest version downloaded') : 'Already up to date', r.conflict ? 'amber' : 'green', 'sync');
+            if (r && r.ok === false) {
+              /* an unsuccessful sync must never be reported as "up to date" */
+              if (!r.auth) UI.alertError('Cloud sync did not run', (r.error || 'The cloud account could not be reached') + '. Your work is saved on this device; nothing was uploaded.');
+            } else {
+              UI.toast(r.action === 'pushed' ? 'Workspace uploaded' : r.action === 'pulled' ? (r.conflict ? 'Updated — an older copy was archived' : 'Latest version downloaded') : 'Already up to date', r.conflict ? 'amber' : 'green', 'sync');
+            }
             UI.render(true);
           } catch (e) { UI.toast('Sync failed: ' + (e.message || e), 'red', 'alert'); }
         }
@@ -609,9 +614,8 @@
     root.querySelectorAll('.theme-chip').forEach((el) => {
       el.addEventListener('click', () => {
         const t = el.dataset.theme;
-        applyTheme(t);
-        root.querySelectorAll('.theme-chip').forEach((c) => c.classList.toggle('active', c === el));
-        UI.toast('Theme set to ' + t, 'green', 'eye');
+        setTheme(root, t);
+        UI.toast('Theme set to ' + t, 'green', 'check');
       });
     });
     root.querySelectorAll('.switch[data-toggle] input').forEach((el) => {

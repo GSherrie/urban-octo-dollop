@@ -31,7 +31,7 @@
       return field('au-email', 'Email', 'email', { ico: 'mail', ph: 'you@business.com', ac: 'email' }) +
         field('au-pass', 'Password', 'password', { ico: 'lock', ph: 'Your password', ac: 'current-password', toggle: true }) +
         '<div class="auth-check"><label><input type="checkbox" id="au-remember" checked> Remember me</label><button type="button" class="auth-link" data-action="forgot">Forgot password?</button></div>' +
-        '<button class="btn primary auth-submit" id="au-go" type="submit">' + icon('lock') + (S.Auth.count() ? 'Log in' : 'Log in') + '</button>' +
+        '<button class="btn primary auth-submit" id="au-go" type="submit">' + icon('login') + (S.Auth.count() ? 'Log in' : 'Log in') + '</button>' +
         '<div class="auth-swap">Don\'t have an account? <button type="button" class="auth-link" data-action="mode" data-m="signup">Sign up</button></div>';
     }
 
@@ -160,7 +160,7 @@
               '<button class="auth-tab' + (mode === 'signup' ? ' on' : '') + '" data-action="mode" data-m="signup" type="button">Sign up</button>' +
             '</div>' +
             '<div id="auth-form"></div>' +
-            '<div class="auth-foot">' + icon('lock') + (S.cloud.enabled() ? ' Cloud sync on — your account &amp; workspace follow your email on any device.' : ' Accounts &amp; data stay on this device — offline-first, nothing leaves your browser.') + '</div>' +
+            '<div class="auth-foot">' + icon('shield') + (S.cloud.enabled() ? ' Cloud sync on — your account &amp; workspace follow your email on any device.' : ' Accounts &amp; data stay on this device — offline-first, nothing leaves your browser.') + '</div>' +
           '</div>' +
         '</div>',
       mount: (root) => { paintForm(); bindAccts(); }

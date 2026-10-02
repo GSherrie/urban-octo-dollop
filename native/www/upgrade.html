@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upgrade to SherPay Pro</title>
+<meta name="description" content="Pay for SherPay Pro with MTN MoMo, Telecel Cash or AT Money. You approve the payment on your phone.">
+<style>
+  :root{--navy:#06244B;--blue:#0A6BDC;--green:#0E8059;--ink:#0F1B2D;--muted:#5B6B7F;--line:#E3EAF3;--bg:#F4F7FB;--amber:#B7791F;--red:#B21E22}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .card{background:#fff;border-radius:18px;box-shadow:0 24px 64px -24px rgba(4,28,58,.35);max-width:430px;width:100%;padding:26px}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .brand img{width:32px;height:32px;border-radius:9px}
+  .brand b{font-size:16px;letter-spacing:-.2px}
+  .badge{display:inline-block;background:#E4FAF1;color:var(--green);border-radius:99px;padding:3px 10px;font-size:11.5px;font-weight:700;margin-left:auto}
+  .num{font-size:12.5px;color:var(--muted)}
+  h1{font-size:26px;letter-spacing:-.5px;margin:2px 0 4px}
+  .sub{font-size:13px;color:var(--muted);margin-bottom:16px}
+  fieldset{border:none;margin:0 0 12px}
+  legend,.f{display:block;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:6px}
+  .wallets{display:grid;gap:8px}
+  .wallet{display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;cursor:pointer;font-size:14px}
+  .wallet input{accent-color:var(--blue);width:17px;height:17px;flex:none}
+  .wallet b{font-weight:600}
+  .wallet span{margin-left:auto;font-size:11.5px;color:var(--muted)}
+  .wallet:has(input:checked){border-color:var(--blue);background:#F2F7FF}
+  .row{display:flex;justify-content-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .row span{color:var(--muted)}
+  .grand{border-bottom:none;padding-top:11px}
+  .grand b{font-size:17px;color:var(--green)}
+  input[type=tel],input[type=email]{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:11px;font:inherit;font-size:15px}
+  input:focus-visible{outline:2px solid var(--blue);outline-offset:1px;border-color:var(--blue)}
+  .hint{font-size:12px;color:var(--muted);margin:6px 2px 0}
+  .hint.warn{color:var(--amber)}
+  .err{background:#FDECEC;color:var(--red);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px;display:none}
+  button{width:100%;padding:13px;border:none;border-radius:11px;background:var(--green);color:#fff;font:inherit;font-weight:700;font-size:15px;cursor:pointer;margin-top:14px}
+  button:disabled{opacity:.55;cursor:default}
+  .ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line);margin-top:8px}
+  a{color:var(--blue);text-decoration:none;font-weight:600}
+  .refbox{background:#F4F7FB;border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin:14px 0}
+  .refbox .lab{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+  .refbox .val{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:16px;letter-spacing:.4px;margin-top:3px;word-break:break-all}
+  .refbox button{width:auto;margin:8px 0 0;padding:6px 11px;font-size:12.5px;background:#fff;color:var(--navy);border:1.5px solid var(--line)}
+  .await{display:flex;gap:11px;align-items:flex-start;background:#F2F7FF;border:1px solid #D6E6FF;border-radius:12px;padding:12px 13px;font-size:13.5px}
+  .spin{flex:none;width:16px;height:16px;margin-top:2px;border:2.5px solid #BBD4FF;border-top-color:var(--blue);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .ok{background:#E4FAF1;border:1px solid #BDEFDB;border-radius:12px;padding:12px 13px;font-size:13.5px;color:#0B5F43;font-weight:600}
+  .note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:14px}
+  .powered{font-size:11px;color:var(--muted);text-align:center;margin-top:10px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand"><img src="assets/logo.png" alt="SherPay logo"><b>SherPay</b><span class="badge" id="badge" hidden>Pro</span></div>
+  <div class="num" id="num">SherPay Pro</div>
+  <h1 id="amt">—</h1>
+  <p class="sub" id="sub">Pay from your mobile money wallet — you approve the payment on your phone.</p>
+
+  <div class="err" id="err" role="alert"></div>
+
+  <!-- step 1 · who pays -->
+  <form id="momoform" novalidate>
+    <fieldset>
+      <legend>Mobile money wallet</legend>
+      <div class="wallets" id="wallets"></div>
+    </fieldset>
+    <label class="f" for="number">Wallet number</label>
+    <input id="number" name="number" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="024 555 0110" aria-describedby="numhint">
+    <p class="hint" id="numhint"></p>
+    <label class="f" for="email" style="margin-top:12px">SherPay account email</label>
+    <input id="email" name="email" type="email" autocomplete="email" placeholder="you@business.com" aria-describedby="emailhint">
+    <p class="hint" id="emailhint">Pro is unlocked on this account — use the one you sign in to SherPay with.</p>
+    <div class="row" style="margin-top:14px"><span id="cycle">Monthly</span><b id="price">—</b></div>
+    <div class="row grand"><span>Amount due today</span><b id="due">—</b></div>
+    <button id="paybtn" type="submit" disabled>Loading…</button>
+    <p class="note">Billed in Ghana cedi. There is no card number to type and no auto-debit.</p>
+  </form>
+
+  <!-- step 2 · approve on the handset: the part of mobile money a card flow never has -->
+  <div id="await" hidden>
+    <div class="await"><span class="spin" aria-hidden="true"></span><span id="awaitmsg">Waiting for you to approve the payment on your phone…</span></div>
+    <div class="refbox">
+      <div class="lab">Your payment reference</div>
+      <div class="val" id="refval">—</div>
+      <button id="copyref" type="button">Copy reference</button>
+      <p class="hint">Quote this if the payment does not land. It is a claim, not a receipt, until Pro is on.</p>
+    </div>
+    <div class="row"><span>Wallet</span><b id="wal">—</b></div>
+    <div class="row"><span>Number</span><b id="acct">—</b></div>
+    <div class="row grand"><span>Amount</span><b id="sum">—</b></div>
+    <p class="hint" id="fallbackwrap" hidden>Not seeing a prompt on your phone? <a id="fallback" href="#" rel="noopener">Approve on Paystack instead</a> — same wallet, same reference.</p>
+    <button class="ghost" id="retry" type="button">Start a new payment</button>
+  </div>
+
+  <!-- step 3 · money arrived, plan is on -->
+  <div id="done" hidden>
+    <div class="ok" id="donemsg">Paid — SherPay Pro is unlocked.</div>
+    <button id="backlink" type="button">Continue to SherPay</button>
+    <p class="note" id="donenote"></p>
+  </div>
+
+  <p class="powered">Powered by <b>SherPay</b> · Secured by Paystack</p>
+</main>
+<script src="js/upgrade.js?v=20"></script>
+</body>
+</html>

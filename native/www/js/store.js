@@ -3,6 +3,7 @@ window.Store = (function () {
   const DB_KEY = 'sherpay_db_v1';
   const USERS_KEY = 'sherpay_users_v1';
   const SESSION_KEY = 'sherpay_session_v1';
+  let dataError = null;  // why the saved workspace could not be opened, if it could not
 
   const CURRENCIES = ['GHS','USD','EUR','GBP','NGN','KES','ZAR','CAD','AUD','INR','AED','JPY'];
   const CATEGORIES = ['Travel','Meals','Software','Office','Marketing','Equipment','Professional Fees','Other'];
@@ -89,7 +90,7 @@ window.Store = (function () {
     cloudSaveTimer = setTimeout(async () => {
       if (cloudSaveBusy) return;
       cloudSaveBusy = true;
-      try { await cloudSync(); } catch (e) {}
+      try { await cloudSync(); } catch (e) { noteAuthError(e); }
       cloudSaveBusy = false;
     }, 1500);
   }
@@ -107,7 +108,12 @@ window.Store = (function () {
         if (typeof db.settings.cloud.enabled !== 'boolean') db.settings.cloud.enabled = true;
         return true;
       }
-    } catch (e) {}
+    } catch (e) {
+      /* The workspace exists but cannot be read. Opening a blank one silently is
+         the worst outcome available — it looks exactly like your data was
+         deleted. Remember why, so the shell can say it out loud instead. */
+      dataError = (e && e.message) ? String(e.message) : 'saved data could not be parsed';
+    }
     return false;
   }
 
@@ -133,6 +139,17 @@ window.Store = (function () {
       activity: []
     };
     save();
+  }
+
+  /* A brand-new workspace is deliberately empty — that is the product, not a
+     bug. The tour is opt-in: open the app with "?demo" anywhere in the URL hash
+     (or set window.__SHERPAY_DEMO__ = true before the scripts run) and the
+     sample clients, invoices and expenses are pre-loaded instead. Saved data is
+     never overwritten by it. */
+  function demoRequested() {
+    if (typeof window !== 'undefined' && window.__SHERPAY_DEMO__ === true) return true;
+    const hash = (typeof location !== 'undefined' && location.hash) ? String(location.hash) : '';
+    return /[?&]demo\b/i.test(hash);
   }
 
   /* ---------------- sample dataset (optional, user-initiated) ---------------- */
@@ -270,6 +287,144 @@ window.Store = (function () {
     } catch (e) { return 0; }
   }
 
+  /* ---------------- plan & upgrades (mobile money checkout) ----------------
+     SherPay Pro is bought on upgrade.html from MTN MoMo, Telecel Cash or AT
+     Money. Nothing here is trusted as proof of payment: the momo-upgrade edge
+     function issues the payment reference, verifies the wallet charge with
+     Paystack and writes the plan. This side only READS the plan — from the
+     synced workspace document (settings.plan) or, when this device's copy
+     predates the payment, from the account's auth app_metadata — and remembers
+     which references this device started so a payment can be resumed. */
+  const PLANS = {
+    pro: {
+      code: 'pro', title: 'SherPay Pro', currency: 'GHS',
+      price: 49, months: 12,
+      blurb: 'Mileage GPS tracker, inventory, client portal & accounting sync',
+      features: ['Mileage Tracker', 'Inventory Management', 'Client Portal', 'Accounting Sync', 'Biometric Login'],
+      wallets: ['MTN MoMo', 'Telecel Cash', 'AT Money']
+    }
+  };
+  const UPGRADE_KEY = 'sherpay_upgrades_v1';
+  const REF_RE = /^SHP-UP-\d{6}-[A-HJ-NP-Z2-9]{8}$/;
+
+  function planState() {
+    const p = (db && db.settings && db.settings.plan) || null;
+    /* A device that activated Pro through the earlier hosted-checkout path
+       stored settings.subscription instead of settings.plan. Reading both keeps
+       that customer on Pro — paying once must not be undone by an upgrade. */
+    const legacy = (db && db.settings && db.settings.subscription) || null;
+    const legacyPro = legacy && legacy.status === 'active';
+    const tier = p && (p.tier || p.plan) === 'pro' ? 'pro' : (legacyPro ? 'pro' : 'free');
+    return {
+      tier,
+      months: (p && p.months) || (legacyPro ? 12 : 0),
+      paid_at: (p && p.paid_at) || (legacyPro && legacy.activatedAt) || '',
+      ref: (p && p.ref) || (legacyPro && legacy.reference) || '',
+      wallet: (p && p.wallet) || '',
+      isPro: tier === 'pro'
+    };
+  }
+  const isPro = () => planState().tier === 'pro';
+  const planTitle = () => (isPro() ? 'SherPay Pro' : 'SherPay Free');
+  function planPrice(code) {
+    const p = PLANS[code || 'pro'];
+    if (!p) return null;
+    return { amount: p.price, currency: p.currency, months: p.months };
+  }
+  /* Where the mobile money checkout lives, and how we arrive there with the
+     account already filled in — nobody should retype an email at a till. */
+  function upgradeLink() {
+    const u = current() || {};
+    const q = '?plan=pro' + (u.email ? '&email=' + encodeURIComponent(u.email) : '');
+    return location.origin + location.pathname.replace(/[^/]*$/, '') + 'upgrade.html' + q;
+  }
+
+  function resumeRefs() {
+    try { return JSON.parse(localStorage.getItem(UPGRADE_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function rememberRef(order) {
+    if (!order || !order.ref) return;
+    const list = resumeRefs().filter((r) => r.ref !== order.ref);
+    list.unshift({
+      ref: order.ref, status: order.status || 'pending', plan: order.plan || 'pro',
+      billing: order.billing || 'monthly', amount: order.amount || 0, currency: order.currency || 'GHS',
+      provider: order.provider || '', account: order.account || '', checkout_url: order.checkout_url || '',
+      at: Date.now()
+    });
+    try { localStorage.setItem(UPGRADE_KEY, JSON.stringify(list.slice(0, 8))); } catch (e) {}
+  }
+  function forgetRef(ref) {
+    try { localStorage.setItem(UPGRADE_KEY, JSON.stringify(resumeRefs().filter((r) => r.ref !== ref))); } catch (e) {}
+  }
+
+  /* A payment can land while this workspace document is away, so the account
+     record is asked too. Silent by design: no account, no cloud, no upgrade are
+     all normal states, and none of them is worth a toast. */
+  async function accountPlan() {
+    if (!cloudClient || !cloudUser) return null;
+    try {
+      const { data, error } = await cloudClient.auth.getUser();
+      const um = data && data.user && data.user.app_metadata;
+      if (noteAuthError(error) || !um || um.sherpay_plan !== 'pro') return null;
+      return { tier: 'pro', billing: um.sherpay_billing || 'monthly', paid_at: um.sherpay_paid_at || '', ref: um.sherpay_ref || '', wallet: um.sherpay_wallet || '' };
+    } catch (e) { return null; }
+  }
+
+  function applyPlan(plan) {
+    if (!plan || plan.tier !== 'pro') return false;
+    const now = planState();
+    if (now.tier === 'pro' && now.ref === plan.ref) return false;
+    if (!db.settings) db.settings = {};
+    db.settings.plan = plan;
+    log('plan', 'SherPay Pro unlocked' + (plan.wallet ? ' — paid with ' + plan.wallet : '') +
+      (plan.ref ? ' (ref ' + plan.ref + ')' : ''));
+    save();
+    return true;
+  }
+
+  /* Called on app open beside syncPayments(): asks about the references this
+     device started and, if the wallet payment has been confirmed since the
+     customer last looked, brings the plan home. */
+  async function syncUpgrades() {
+    const cfg = payConfig();
+    const cloud = (db.settings && db.settings.cloud) || {};
+    const url = ((cfg.supabaseUrl || cloud.url || DEFAULT_CLOUD_URL) + '').replace(/\/+$/, '');
+    const key = cfg.supabaseAnonKey || cloud.anonKey || DEFAULT_CLOUD_ANON;
+    let changed = false;
+    for (const r of resumeRefs().filter((x) => REF_RE.test(x.ref) && x.status !== 'paid')) {
+      try {
+        const res = await fetch(url + '/functions/v1/momo-upgrade', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: key, Authorization: 'Bearer ' + key },
+          body: JSON.stringify({ action: 'status', ref: r.ref })
+        });
+        if (!res.ok) continue;
+        const body = await res.json();
+        const order = body && body.order;
+        if (!order) continue;
+        if (order.status === 'paid') {
+          forgetRef(r.ref);
+          /* Months come from the catalog, not from the order we were handed:
+             a plan is what we sell, and the row only records what was bought. */
+          const months = (PLANS[order.plan] || PLANS.pro).months;
+          changed = applyPlan({
+            tier: 'pro', months, billing: order.billing, paid_at: order.paid_at,
+            ref: order.ref, wallet: order.provider, amount: order.amount, currency: order.currency
+          }) || changed;
+        } else if (order.status === 'failed' || order.status === 'expired') forgetRef(r.ref);
+        else rememberRef(order);
+      } catch (e) { /* offline: the reference waits for the next open */ }
+    }
+    /* The account record is the other door in: it catches a payment made on
+       another device while this workspace copy fell behind. */
+    return applyPlan(await accountPlan()) || changed;
+  }
+
+  const upgrades = {
+    catalog: PLANS, state: planState, isPro, title: planTitle, price: planPrice,
+    link: upgradeLink, resumeRefs, rememberRef, forgetRef, sync: syncUpgrades, applyPlan
+  };
+
   const getClient = (id) => (db.clients.find((c) => c.id === id) || null);
   const getInvoice = (id) => (db.invoices.find((i) => i.id === id) || null);
 
@@ -389,6 +544,40 @@ window.Store = (function () {
   }
 
   /* ---------------- reports ---------------- */
+  /* ---------------- open loops: setup progress & drafts ----------------
+     A blank workspace is a set of unclosed loops, and an unfinished sequence
+     nags harder than an unseen one. Each step is a milestone the store can
+     actually verify (never a self-declared flag), so the dashboard can say
+     "2 of 5" and keep the card on screen until the last one closes.
+     Order is the shortest path to money in the bank. */
+  function setupSteps() {
+    const s = db.settings || {}, biz = s.business || {};
+    const bizOk = String(biz.name || '').trim().length > 2 && String(biz.email || '').trim().length > 3;
+    const anyInvoice = (db.invoices || []).length > 0;
+    const anySent = (db.invoices || []).some((i) => !!i.sentAt || !['draft'].includes(displayStatus(i)));
+    const anyPaid = (db.invoices || []).some((i) => (i.payments || []).length > 0);
+    return [
+      { id: 'biz', label: 'Set up your business profile', hint: 'Name, email and address print on every invoice', done: bizOk, href: '#/settings', icon: 'settings' },
+      { id: 'client', label: 'Add your first client', hint: 'Contact and payment terms auto-fill new invoices', done: (db.clients || []).length > 0, href: '#/clients', icon: 'clients' },
+      { id: 'invoice', label: 'Create your first invoice', hint: 'Line items, tax and numbering are handled for you', done: anyInvoice, href: '#/invoices/new', icon: 'invoice' },
+      { id: 'send', label: 'Send it and get a pay link', hint: 'The client pays by card or mobile money', done: anySent, href: '#/invoices', icon: 'send' },
+      { id: 'paid', label: 'See your first payment land', hint: 'Part-payments and receipts are automatic', done: anyPaid, href: '#/invoices', icon: 'wallet' }
+    ];
+  }
+  function setupProgress() {
+    const steps = setupSteps();
+    const done = steps.filter((x) => x.done).length;
+    return { steps: steps, done: done, total: steps.length, pct: Math.round((done / steps.length) * 100), complete: done === steps.length };
+  }
+  /* unsent drafts are unfinished business: newest first (createdAt falls back
+     to array order, since unshift keeps newest at the top) */
+  function recentDrafts(n) {
+    const list = (db.invoices || []).filter((i) => i.status === 'draft');
+    const hasStamps = list.some((i) => i.createdAt);
+    const sorted = hasStamps ? list.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) : list.slice();
+    return sorted.slice(0, n || 3);
+  }
+
   function lastMonths(n) {
     const out = []; const d = new Date(); d.setDate(1);
     for (let i = n - 1; i >= 0; i--) { const x = new Date(d); x.setMonth(x.getMonth() - i); out.push(iso(x).slice(0, 7)); }
@@ -589,6 +778,37 @@ window.Store = (function () {
   const CONFLICT_KEY = 'sherpay_conflict_v1';
   let cloudClient = null, cloudUser = null, cloudStatus = 'off', cloudLastError = null, cloudLastAction = 'never';
 
+  /* ---------- expired cloud session (loud, once) ---------------------------
+     A session that quietly stops authenticating is the worst kind of failure:
+     the app looks normal, saving looks normal, and nothing is going up. So the
+     expired/invalid-token shapes are recognised, the status says "expired", and
+     the shell is told once — the shell answers with a dialog, not a toast that
+     fades while you are still typing. */
+  const sessionExpiredHandlers = [];
+  let sessionExpiredFired = false;
+  function onSessionExpired(fn) {
+    if (typeof fn !== 'function') return function () {};
+    sessionExpiredHandlers.push(fn);
+    return function () { const i = sessionExpiredHandlers.indexOf(fn); if (i > -1) sessionExpiredHandlers.splice(i, 1); };
+  }
+  function isAuthError(e) {
+    if (!e) return false;
+    const st = e.status || e.statusCode || (e.response && e.response.status);
+    if (st === 401 || st === 403) return true;
+    return /invalid jwt|jwt expired|jwt is not valid|invalid login credentials|failed to fetch user|session has expired|new authorization information required/i.test(String(e.message || e));
+  }
+  /* returns true when the problem was the session and has now been reported */
+  function noteAuthError(e) {
+    if (!isAuthError(e)) return false;
+    cloudStatus = 'expired';
+    cloudLastError = 'Your cloud session expired — sign in again to keep syncing.';
+    if (!sessionExpiredFired) {
+      sessionExpiredFired = true;
+      sessionExpiredHandlers.slice().forEach((h) => { try { h(); } catch (x) {} });
+    }
+    return true;
+  }
+
   function cloudLastSync() { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || '{"at":0}').at || 0; } catch (e) { return 0; } }
   function cloudConflict() { try { return JSON.parse(localStorage.getItem(CONFLICT_KEY) || 'null'); } catch (e) { return null; } }
   function cloudRestoreConflict() {
@@ -648,24 +868,32 @@ window.Store = (function () {
     if (!cfg.enabled) { cloudStatus = 'off'; cloudClient = null; cloudUser = null; return; }
     cloudStatus = 'connecting';
     try {
-      await loadSupabaseJs();
-      cloudClient = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { detectSessionInUrl: false } });
+      /* window.__SHERPAY_CLOUD_CLIENT__ is a documented seam for tests and for
+         a self-hosted client; production code never sets it. */
+      const forced = typeof window !== 'undefined' && window.__SHERPAY_CLOUD_CLIENT__;
+      if (forced) cloudClient = forced;
+      else {
+        await loadSupabaseJs();
+        cloudClient = window.supabase.createClient(cfg.url, cfg.anonKey, { auth: { detectSessionInUrl: false } });
+      }
       const { data, error } = await cloudClient.auth.getSession();
       if (error) throw error;
       const u = data && data.session && data.session.user;
       cloudUser = u ? mapUser(u) : null;
       cloudStatus = 'on'; cloudLastError = null;
       if (cloudUser) await cloudSync();
-    } catch (e) { cloudStatus = 'error'; cloudLastError = (e && e.message) || 'Connection failed'; }
+    } catch (e) { if (!noteAuthError(e)) { cloudStatus = 'error'; cloudLastError = (e && e.message) || 'Connection failed'; } }
   }
 
   async function cloudSync() {
     if (!cloudClient) return { ok: false, error: 'Cloud sync is off' };
-    const { data: ud } = await cloudClient.auth.getUser();
+    const { data: ud, error: uErr } = await cloudClient.auth.getUser();
+    if (noteAuthError(uErr)) return { ok: false, error: cloudLastError, auth: true };
     const user = ud && ud.user;
     if (!user) return { ok: false, error: 'Not signed in' };
     const { data: row, error: rErr } = await cloudClient.from('cloud_state')
       .select('data,updated_at').eq('user_id', user.id).maybeSingle();
+    if (noteAuthError(rErr)) return { ok: false, error: cloudLastError, auth: true };
     if (rErr) throw rErr;
     const remoteAt = row ? Date.parse(row.updated_at) : 0;
     const localAt = db.settings.updatedAt || 0;
@@ -684,6 +912,7 @@ window.Store = (function () {
     if (localDirty || !row) {
       const { error } = await cloudClient.from('cloud_state')
         .upsert({ user_id: user.id, data: JSON.parse(JSON.stringify(db)), updated_at: new Date(localAt || Date.now()).toISOString() });
+      if (noteAuthError(error)) return { ok: false, error: cloudLastError, auth: true };
       if (error) throw error;
       setSyncMeta(localAt || Date.now());
       cloudLastAction = 'pushed';
@@ -703,7 +932,7 @@ window.Store = (function () {
         return { ok: true, action: 'pushed' };
       }
       setSyncMeta(remoteAt || (meta.at || 0));
-    } catch (e) { setSyncMeta(remoteAt || (meta.at || 0)); }
+    } catch (e) { noteAuthError(e); setSyncMeta(remoteAt || (meta.at || 0)); }
     cloudLastAction = 'none';
     return { ok: true, action: 'none' };
   }
@@ -765,7 +994,12 @@ window.Store = (function () {
   }
 
   function boot() {
-    if (!load()) blank();
+    if (!load()) {
+      /* A fresh workspace starts empty. The sample dataset is opt-in: add ?demo to
+         the URL hash (or set window.__SHERPAY_DEMO__ = true) and the tour arrives
+         pre-filled instead. Anything already saved always wins. */
+      if (demoRequested()) demoData(); else blank();
+    }
     runAutomations(true);
     save();
   }
@@ -775,6 +1009,7 @@ window.Store = (function () {
     get db() { return db; },
     set db(v) { db = v; },
     save, boot, resetDemo, loadDemo: demoData,
+    dataError: () => dataError, demoRequested,
         /* Auth: local is sync (tests + UI call sites read .user directly);
            cloud is async and exposed under Auth.cloudAuth for cloud mode. */
         Auth: {
@@ -785,12 +1020,14 @@ window.Store = (function () {
           cloudAuth,
           __sha256: sha256
         },
-    cloud: { init: cloudInit, sync: cloudSync, enabled: cloudOn, hasConflict: hasConflictArchive, restoreConflict: cloudRestoreConflict, discardConflict: cloudDiscardConflict, downloadConflict: cloudExportConflict, lastSync: cloudLastSync, lastAction: () => cloudLastAction, lastError: () => cloudLastError, status: () => cloudStatus },
+    cloud: { init: cloudInit, sync: cloudSync, enabled: cloudOn, hasConflict: hasConflictArchive, restoreConflict: cloudRestoreConflict, discardConflict: cloudDiscardConflict, downloadConflict: cloudExportConflict, lastSync: cloudLastSync, lastAction: () => cloudLastAction, lastError: () => cloudLastError, status: () => cloudStatus, onSessionExpired, isAuthError },
     CURRENCIES, CATEGORIES, PAY_METHODS, STATUS_LABEL, CLOUD_URL: DEFAULT_CLOUD_URL, CLOUD_ANON: DEFAULT_CLOUD_ANON,
     uid, num, pad, iso, todayISO, addDays, addMonths, daysBetween, fmtDate, fmtDateTime, monthKey, monthLabel, fmtMoney, esc,
     getClient, getInvoice, computeTotals, displayStatus, newInvoiceNumber, log,
+    setupSteps, setupProgress, recentDrafts,
     runAutomations, recordPayment, markSent, markViewed, receiptNumber,
     createPaymentLink, syncPayments,
+    PLANS, upgrades, syncUpgrades,
     lastMonths, moneyByMonth, kpis, toCSV, download
   };
 })();

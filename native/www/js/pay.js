@@ -3,9 +3,23 @@
 (function () {
   var qs = new URLSearchParams(location.search);
   var token = qs.get('t') || '';
-  /* injected at build/deploy time by scripts/patch-pay-config.js */
-  var SUPABASE_URL = '__SUPABASE_URL__';
-  var SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+  /* Backend config, resolved in priority order:
+       1. values injected by scripts/patch-pay-config.js (it replaces the two
+          __TOKENS__ below from .env.payments at build/deploy time);
+       2. the committed defaults, which are the same publishable values
+          js/store.js already ships — cloud sync uses this same project.
+     Only publishable/anon values belong here. The Paystack SECRET key lives
+     solely in the pay-verify edge function's secrets and never reaches a browser.
+     Without the fallback an unpatched bundle fetched the literal path
+     "__SUPABASE_URL__/rest/v1/…", so every payment link died as "Unavailable". */
+  var DEFAULT_SUPABASE_URL = 'https://jmmrcrnfwyrbejhechke.supabase.co';
+  var DEFAULT_SUPABASE_ANON = 'sb_publishable_S_HPkVny_wM-PQ4PRqXC4w_C3ufIsH8';
+  function resolvePayConfig(injected, fallback) {
+    if (typeof injected === 'string' && injected && injected.indexOf('__') !== 0) return injected;
+    return fallback || '';
+  }
+  var SUPABASE_URL = resolvePayConfig('__SUPABASE_URL__', DEFAULT_SUPABASE_URL).replace(/\/+$/, '');
+  var SUPABASE_ANON_KEY = resolvePayConfig('__SUPABASE_ANON_KEY__', DEFAULT_SUPABASE_ANON);
 
   var $ = function (id) { return document.getElementById(id); };
   var row = null;
@@ -22,6 +36,11 @@
   }
 
   if (!token) { fail('This payment link is incomplete.'); return; }
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    fail('Online payments are not configured for this business yet. Please pay using the details on your invoice.');
+    return;
+  }
 
   fetch(SUPABASE_URL + '/rest/v1/payment_requests?token=eq.' + encodeURIComponent(token) + '&select=*', {
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY }
