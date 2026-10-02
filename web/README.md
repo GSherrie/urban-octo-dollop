@@ -57,6 +57,59 @@ node scripts/sync-www.js webdeploy && npx vercel deploy webdeploy --prod --yes
 
 Single-file offline copy: https://sherpay.vercel.app/SherPay-mobile.html
 
+## SherPay Pro upgrades (Mobile Money)
+
+The Pro upgrade is a one-time GHS 49 payment (12 months) from a Ghana mobile money
+wallet: MTN MoMo, Telecel Cash or AT Money. The customer types the number, gets a
+prompt on their handset, approves it — no PIN is ever collected by SherPay.
+
+Every attempt gets a **payment reference**, `SHP-UP-YYMMDD-XXXXXXXX`, issued by the
+`momo-upgrade` edge function (never by the browser) and stored in the private
+`payments` ledger. That reference is the transaction reference sent to Paystack,
+the handle the customer quotes if anything goes wrong, the `?ref=` in the checkout URL
+(so a closed tab can be reopened), and the key a webhook or a poll is matched on. The
+page shows it while the payment waits, and offers Paystack's hosted mobile-money page
+as a fallback for wallets where a direct push is not permitted.
+
+An order walks `created → pending → awaiting_approval → paid | failed | expired`; a
+half-hour of silence expires it, and terminal states never move again. Pro is granted
+only after Paystack confirms a successful transaction carrying **our reference**, for at
+least the server-set price, in cedi — verified on the status poll *and* on the webhook,
+and written once by a guarded row flip, so repeated delivery cannot grant twice. Grant
+writes `auth.users.app_metadata` and the account's `cloud_state` document, so the
+account is unlocked on every device.
+
+Not applied or deployed in this workspace (no Supabase project access here) — the
+commands below are the remaining steps.
+
+To enable live upgrades in Supabase:
+
+1. Link the intended project and apply the migration: `supabase link --project-ref <ref>`
+   followed by `supabase db push`. The migration is
+   `supabase/migrations/20261006_payments.sql`; it creates `public.payments` — one row
+   per payment reference, with `email`, `plan`, `amount`, `currency`, the status set
+   above, `momo_provider`, `momo_number`, `checkout_url`, `expires_at`, `paid_at`,
+   `granted_at`, plus `ref`/`provider_reference` as stored generated aliases of
+   `reference`/`paystack_reference`. RLS is enabled *and* the table is revoked from
+   `public`/`anon`/`authenticated`, so no signed-in customer can read or write it over
+   PostgREST; the Edge Function is the only writer, using the service role.
+2. Deploy the initializer, status verifier, and webhook handler:
+   `supabase functions deploy momo-upgrade --project-ref <ref> --no-verify-jwt`.
+3. Add `PAYSTACK_SECRET_KEY` using `supabase secrets set PAYSTACK_SECRET_KEY=sk_live_...`.
+   Use `sk_test_...` while testing; use `sk_live_...` only when ready to collect real
+   payments. The secret is only read by the Edge Function and is never bundled to browsers.
+4. In the Paystack dashboard, set the webhook URL to
+   `https://<project-ref>.supabase.co/functions/v1/momo-upgrade` and subscribe to
+   `charge.success`. Paystack signs webhook requests with the integration secret key, so
+   the function validates `x-paystack-signature` using `PAYSTACK_SECRET_KEY` before
+   re-verifying the transaction with Paystack.
+5. Enable Ghana Mobile Money on the Paystack integration. The configured price is controlled
+   by the server plan table in `supabase/functions/momo-upgrade/core.mjs`, not by browser
+   request parameters.
+
+Pending references are stored on-device and can be resumed from `upgrade.html`; a verified
+payment is granted to the matching SherPay account and its synced workspace.
+
 ## Ship it permanently
 
 - **Web host:** `dist/` (or `SherPay-web-dist.zip`) is the deployable static bundle — hash routing means zero
@@ -84,7 +137,7 @@ Single-file offline copy: https://sherpay.vercel.app/SherPay-mobile.html
 - **Reports** — P&L by month, tax collected vs recoverable, expense categories, accountant-ready CSVs.
 - **Templates** — 5 brand accents × 3 fonts, uploadable logo, business profile printed on every document.
 - **UX** — mobile bottom-nav layout, search + status filters, offline indicator (data stays on-device, syncs on reconnect), toasts, empty states.
-- **Pro tier (locked, shown in app)** — GPS mileage tracker, inventory, client portal, QuickBooks/Xero sync, biometric login.
+- **Pro tier** — GPS mileage tracker, inventory, client portal, QuickBooks/Xero sync and biometric login; one-time upgrade checkout is available through Mobile Money.
 
 ## Architecture
 

@@ -8,6 +8,11 @@
   --violet:#7C6BF2; --violet-soft:#EFECFE;
   --ink:#0F1B2D; --muted:#5B6B7F; --faint:#67748B;
   --bg:#F4F7FB; --card:#FFFFFF; --line:#E3EAF3; --line-2:#EDF2F8;
+  /* semantic surfaces — remapped wholesale by html[data-theme="dark"] below */
+  --field:#FFFFFF; --panel:#F8FAFD; --hover:#F8FAFD; --chip:#FFFFFF; --seg-bg:#EDF1F6; --sheet:#FFFFFF;
+  --on-blue-soft:#0662C4; --on-green-soft:#0A8F61; --on-red-soft:#C0262B; --on-amber-soft:#A56A00; --on-violet-soft:#5B4BD1;
+  --green-deep:#0E8059; --green-deep-ink:#04301F;
+  --selection:#BFE0FF;
   --radius:14px; --radius-sm:10px;
   --shadow:0 1px 2px rgba(16,42,67,.06), 0 6px 24px -12px rgba(16,42,67,.18);
   --shadow-lg:0 24px 64px -24px rgba(4,28,58,.35);
@@ -40,7 +45,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .legal-notice .ln-txt{flex:1;display:grid;gap:2px;font-size:12.5px;line-height:1.45}
 .legal-notice .ln-txt span{color:#C9D9EC}
 @media (max-width:640px){.legal-notice{flex-direction:column;align-items:stretch;text-align:left}}
-::selection{background:#BFE0FF}
+::selection{background:var(--selection)}
 
 /* ---------- boot splash (animated logo on every app load) ---------- */
 .shell-loading{position:fixed; inset:0; display:grid; place-items:center; background:var(--bg)}
@@ -96,17 +101,20 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .topbar .sub{font-size:12.5px; color:var(--muted); margin-top:1px}
 .topbar .spacer{flex:1}
 #tb-actions{flex-wrap:wrap; justify-content:flex-end}
-.tb-account{display:flex; align-items:center; padding:3px; border-radius:11px; background:#fff; border:1px solid var(--line); box-shadow:0 1px 3px rgba(16,42,67,.08); transition:border-color .15s, box-shadow .15s; flex:none}
+.tb-account{display:flex; align-items:center; padding:3px; border-radius:11px; background:var(--field); border:1px solid var(--line); box-shadow:0 1px 3px rgba(16,42,67,.08); transition:border-color .15s, box-shadow .15s; flex:none}
 .tb-account:hover{border-color:var(--blue); box-shadow:0 6px 16px -8px rgba(11,124,255,.45)}
 .tb-account:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
 .tb-account .avatar{width:32px; height:32px; border-radius:8px; font-size:12px}
 #view{padding:24px 28px 90px; max-width:1180px; width:100%; margin:0 auto}
 
 /* ---------- bottom nav (mobile) ---------- */
-.bottomnav{display:none; position:fixed; bottom:0; left:0; right:0; z-index:40; background:#fff; border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+.bottomnav{display:none; position:fixed; bottom:0; left:0; right:0; z-index:40; background:var(--card); border-top:1px solid var(--line); padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
 .bottomnav button{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10.5px; font-weight:600; color:var(--faint); padding:4px 0}
 .bottomnav button svg{width:21px; height:21px}
 .bottomnav button.active{color:var(--blue)}
+/* invoice editor action bar: built for the phone thumb, hidden on desktop
+   where the header already carries Save (see the 760px block below) */
+.editor-bar{display:none}
 
 /* ---------- primitives ---------- */
 .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow)}
@@ -120,12 +128,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .btn:active{transform:translateY(1px)}
 .btn.primary{background:linear-gradient(90deg,var(--blue-light),var(--blue)); color:#fff; box-shadow:0 8px 20px -8px rgba(11,124,255,.65)}
 .btn.green{background:var(--green); color:#04301F; box-shadow:0 8px 20px -8px rgba(18,212,138,.6)}
-.btn.ghost{background:#fff; border:1px solid var(--line); color:var(--ink)}
-.btn.danger{background:var(--red-soft); color:#B3272C}
+.btn.ghost{background:var(--field); border:1px solid var(--line); color:var(--ink)}
+.btn.danger{background:var(--red-soft); color:var(--on-red-soft)}
 .btn.sm{padding:6px 11px; font-size:12.5px; border-radius:8px}
 .btn.icon{padding:8px; border-radius:9px}
 .btn:disabled{opacity:.5; cursor:not-allowed}
-.input, select.input, textarea.input{width:100%; background:#fff; border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13.5px; outline:none; transition:border .15s, box-shadow .15s}
+.input, select.input, textarea.input{width:100%; background:var(--field); border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13.5px; outline:none; transition:border .15s, box-shadow .15s}
 .input:focus{border-color:var(--blue); box-shadow:0 0 0 3px rgba(11,124,255,.14)}
 textarea.input{resize:vertical; min-height:70px}
 label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); margin:0 0 6px}
@@ -143,15 +151,15 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 .grid.kpis{grid-template-columns:repeat(4,1fr)}
 .grid.two{grid-template-columns:1.55fr 1fr}
 .grid.half{grid-template-columns:1fr 1fr}
-.chip{display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:99px; background:#fff; border:1px solid var(--line); font-size:12.5px; font-weight:600; color:var(--muted)}
+.chip{display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:99px; background:var(--chip); border:1px solid var(--line); font-size:12.5px; font-weight:600; color:var(--muted)}
 .chip.on{background:var(--navy-700); border-color:var(--navy-700); color:#fff}
 .badge{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; padding:3.5px 9px; border-radius:6px}
-.badge.draft{background:#EDF1F6; color:#5B6B7F}
-.badge.sent{background:var(--blue-soft); color:#0662C4}
-.badge.viewed{background:var(--violet-soft); color:#5B4BD1}
-.badge.paid{background:var(--green-soft); color:#0A8F61}
-.badge.overdue{background:var(--red-soft); color:#C0262B}
-.badge.partial{background:var(--amber-soft); color:#A56A00}
+.badge.draft{background:var(--seg-bg); color:var(--muted)}
+.badge.sent{background:var(--blue-soft); color:var(--on-blue-soft)}
+.badge.viewed{background:var(--violet-soft); color:var(--on-violet-soft)}
+.badge.paid{background:var(--green-soft); color:var(--on-green-soft)}
+.badge.overdue{background:var(--red-soft); color:var(--on-red-soft)}
+.badge.partial{background:var(--amber-soft); color:var(--on-amber-soft)}
 .badge.pro{background:linear-gradient(90deg,#FFE9A8,#FFD370); color:#6B4E00}
 
 /* ---------- tables ---------- */
@@ -160,7 +168,7 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 .table td{padding:12px 14px; border-bottom:1px solid var(--line-2); vertical-align:middle}
 .table tr:last-child td{border-bottom:none}
 .table tbody tr.clickable{cursor:pointer; transition:background .12s}
-.table tbody tr.clickable:hover{background:#F8FAFD}
+.table tbody tr.clickable:hover{background:var(--hover)}
 .tnum{font-variant-numeric:tabular-nums; font-weight:700}
 .table .right{text-align:right}
 .scroll-x{overflow-x:auto; -webkit-overflow-scrolling:touch; touch-action:pan-x; overscroll-behavior-x:contain}
@@ -189,7 +197,16 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 .act-item time{color:var(--faint); font-size:11.5px}
 
 /* ---------- invoice paper ---------- */
-.paper{background:#fff; border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:38px 42px; max-width:820px; margin:0 auto; --acc:var(--blue); --acc2:var(--blue-light)}
+/* The invoice document is a print artefact: it always keeps the light palette —
+   including inside dark mode — so a screen preview matches the printed / PDF page.
+   These local token overrides scope the light values to the paper subtree only. */
+.paper{background:#fff; color:var(--ink); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:38px 42px; max-width:820px; margin:0 auto;
+  --ink:#0F1B2D; --muted:#5B6B7F; --faint:#67748B; --line:#E3EAF3; --line-2:#EDF2F8;
+  --blue:#0A6BDC; --blue-light:#2FA8FF; --blue-soft:#E8F3FF; --on-blue-soft:#0662C4;
+  --green-dark:#0E8059; --green-soft:#E4FAF1; --on-green-soft:#0A8F61;
+  --amber-soft:#FEF4E2; --on-amber-soft:#A56A00; --red-soft:#FDECEC; --on-red-soft:#C0262B;
+  --violet-soft:#EFECFE; --on-violet-soft:#5B4BD1; --seg-bg:#EDF1F6;
+  --acc:var(--blue); --acc2:var(--blue-light)}
 .paper.font-serif{font-family:Georgia,"Times New Roman",serif}
 .paper.font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .paper.acc-green{--acc:#0BAF72; --acc2:#3BE3A5}
@@ -219,7 +236,7 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 .paper-notes{margin-top:26px; padding-top:16px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); white-space:pre-line}
 .paper-foot{margin-top:26px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:11.5px; color:var(--faint)}
 .paper-foot img{width:18px; height:18px; border-radius:5px}
-.pay-bar{position:sticky; bottom:0; display:flex; align-items:center; gap:12px; padding:14px 18px; background:#fff; border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow-lg); max-width:820px; margin:18px auto 0}
+.pay-bar{position:sticky; bottom:0; display:flex; align-items:center; gap:12px; padding:14px 18px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow-lg); max-width:820px; margin:18px auto 0}
 .pay-bar .amt{font-size:19px; font-weight:800}
 
 /* ---------- editor ---------- */
@@ -228,16 +245,16 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 .items-table{min-width:560px}
 .items-table .input{padding:8px 10px}
 .items-table td.amt{padding-top:16px; white-space:nowrap}
-.totals-panel{background:#F8FAFD; border:1px solid var(--line-2); border-radius:12px; padding:14px 16px}
+.totals-panel{background:var(--panel); border:1px solid var(--line-2); border-radius:12px; padding:14px 16px}
 .totals-panel .tr{display:flex; justify-content:space-between; padding:4px 0; font-size:13.5px}
 .totals-panel .tr.grand{border-top:1px solid var(--line); margin-top:6px; padding-top:9px; font-size:16px; font-weight:800}
-.seg{display:inline-flex; background:#EDF1F6; border-radius:9px; padding:3px; gap:3px}
+.seg{display:inline-flex; background:var(--seg-bg); border-radius:9px; padding:3px; gap:3px}
 .seg button{padding:5px 12px; border-radius:7px; font-size:12px; font-weight:700; color:var(--muted)}
-.seg button.on{background:#fff; color:var(--navy-700); box-shadow:0 1px 4px rgba(16,42,67,.14)}
+.seg button.on{background:var(--field); color:var(--navy-700); box-shadow:0 1px 4px rgba(16,42,67,.14)}
 
 /* ---------- modal ---------- */
 .modal-backdrop{position:fixed; inset:0; background:rgba(4,28,58,.5); backdrop-filter:blur(3px); z-index:60; display:grid; place-items:center; padding:18px; animation:fade .16s ease}
-.modal{background:#fff; border-radius:16px; box-shadow:var(--shadow-lg); width:min(560px,100%); max-height:88vh; display:flex; flex-direction:column; animation:pop .18s ease}
+.modal{background:var(--sheet); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow-lg); width:min(560px,100%); max-height:88vh; display:flex; flex-direction:column; animation:pop .18s ease}
 .modal.wide{width:min(760px,100%)}
 .modal-h{display:flex; align-items:center; gap:10px; padding:16px 20px; border-bottom:1px solid var(--line-2)}
 .modal-h h3{font-size:15.5px; font-weight:800}
@@ -249,7 +266,7 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 #toast-root{position:fixed; top:16px; right:16px; z-index:80; display:flex; flex-direction:column; gap:9px; pointer-events:none}
 .toast{display:flex; align-items:center; gap:10px; background:var(--navy-800); color:#fff; padding:11px 16px; border-radius:12px; box-shadow:var(--shadow-lg); font-size:13.5px; font-weight:600; animation:toast-in .22s ease; max-width:340px}
 .toast svg{width:17px; height:17px; flex:none}
-.toast.green{background:var(--green-dark)} .toast.red{background:#C0262B}
+.toast.green{background:var(--green-deep)} .toast.red{background:#B3272C}
 @keyframes toast-in{from{opacity:0; transform:translateX(14px)}}
 
 /* ---------- misc ---------- */
@@ -365,7 +382,7 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 .acct-meta{flex:1; min-width:0}
 .acct-meta b{display:block; font-size:15px; letter-spacing:-.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .acct-meta span{display:block; font-size:12.5px; color:var(--muted); word-break:break-all}
-.badge.plan{background:var(--blue-soft); color:#0662C4; flex:none}
+.badge.plan{background:var(--blue-soft); color:var(--on-blue-soft); flex:none}
 
 /* ---------- account / profile view ---------- */
 .account-scroll{max-width:720px;margin:0 auto}
@@ -381,7 +398,7 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 .w100{width:100%}
 
 /* notification toggle chips */
-.chip.toggle{cursor:pointer;user-select:none;transition:background .15s,color .15s;border:1px solid var(--line);background:var(--green-soft);color:var(--green-dark);padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.chip.toggle{cursor:pointer;user-select:none;transition:background .15s,color .15s;border:1px solid var(--line);background:var(--green-soft);color:var(--on-green-soft);padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
 
 /* theme chips */
 .theme-chip{cursor:pointer;user-select:none;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:5px 14px;border-radius:99px;font-size:12.5px;font-weight:600;transition:all .15s}
@@ -415,6 +432,19 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
 @media (max-width: 760px){
   .sidebar{display:none}
   .bottomnav{display:flex}
+  /* Invoice editor on a phone: the primary action sits under the thumb (Fitts)
+     where people expect it (Jakob), carrying the total it produces; the header
+     keeps only the safe exit, and the bar stands in for the tab bar. */
+  .editor-bar{display:flex; position:fixed; left:0; right:0; bottom:0; z-index:41; align-items:center; gap:9px;
+    background:var(--card); border-top:1px solid var(--line); box-shadow:0 -14px 30px rgba(16,24,40,.14);
+    padding:9px 12px calc(9px + env(safe-area-inset-bottom))}
+  .editor-bar .tot{flex:1; min-width:0; line-height:1.15}
+  .editor-bar .tot .k{display:block; font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--faint)}
+  .editor-bar .tot .v{font-size:16px; font-weight:800; color:var(--ink)}
+  .editor-bar .btn{flex:0 0 auto; min-height:44px; padding:0 11px; font-size:12.5px}
+  body[data-route="invoices-new"] .bottomnav, body[data-route="invoices-edit"] .bottomnav{display:none}
+  body[data-route="invoices-new"] #view, body[data-route="invoices-edit"] #view{padding-bottom:calc(104px + env(safe-area-inset-bottom))}
+  .topbar #tb-actions [data-action="save"], .topbar #tb-actions [data-action="save-send"]{display:none}
   .topbar{padding:calc(13px + env(safe-area-inset-top)) 16px 13px}
   #view{padding:16px 14px calc(96px + env(safe-area-inset-bottom))}
   .grid.kpis{grid-template-columns:1fr 1fr; gap:11px}
@@ -429,3 +459,242 @@ label.f{display:block; font-size:12px; font-weight:700; color:var(--muted); marg
   .table th:nth-child(n),.table td:nth-child(n){padding:10px 9px}
   .hide-sm{display:none !important}
 }
+
+/* ==========================================================================
+   DARK MODE — html[data-theme="dark"], applied by UI.applyTheme() from
+   db.settings.preferences.theme ("light" | "dark" | "system").
+   Every surface in the app reads these tokens, so the whole UI flips together.
+   The invoice .paper deliberately keeps its own light palette (see the paper
+   block above) so a document preview still matches the printed / PDF page.
+   ========================================================================== */
+html[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#0B1220; --card:#121C2E; --line:#25344C; --line-2:#1B2739;
+  --ink:#E8EEF7; --muted:#9CB0C7; --faint:#7F92AA;
+  --field:#0F1828; --panel:#101B2C; --hover:#16223A; --chip:#141F32; --seg-bg:#182537; --sheet:#121C2E;
+  --blue:#4D9DFF; --blue-light:#7BBBFF; --blue-soft:#16293F; --on-blue-soft:#9CC9FF;
+  --green:#1FD795; --green-dark:#4FD9A6; --green-soft:#12312A; --on-green-soft:#5FE0B0;
+  --green-deep:#0E8059; --green-deep-ink:#04301F;                 /* solid fills keep white/dark ink */
+  --red:#FF7B80; --red-soft:#391E23; --on-red-soft:#FFA9AD;
+  --amber:#F5B547; --amber-soft:#33270F; --on-amber-soft:#F8CB84;
+  --violet:#A395FF; --violet-soft:#241E43; --on-violet-soft:#C4BAFF;
+  --navy-600:#22456F; --navy-700:#9CC4F5;   /* navy-700 is accent *ink* — lighten it on dark cards */
+  --selection:#2A4A74;
+  --shadow:0 1px 2px rgba(0,0,0,.55), 0 8px 24px -12px rgba(0,0,0,.55);
+  --shadow-lg:0 24px 64px -24px rgba(0,0,0,.8);
+}
+/* chrome that hard-codes a light tint or a navy fill */
+html[data-theme="dark"] .topbar{background:rgba(11,18,32,.86)}
+html[data-theme="dark"] .modal-backdrop{background:rgba(2,7,15,.66)}
+html[data-theme="dark"] .btn:hover{filter:brightness(1.16)}
+html[data-theme="dark"] .input:focus{border-color:var(--blue); box-shadow:0 0 0 3px rgba(77,157,255,.22)}
+html[data-theme="dark"] .chip.on{background:var(--blue); border-color:var(--blue); color:#04121F}
+html[data-theme="dark"] .seg button.on{box-shadow:0 1px 4px rgba(0,0,0,.55)}
+html[data-theme="dark"] .toast{background:#16233A; color:#EAF1FA; border:1px solid var(--line)}
+html[data-theme="dark"] .toast.green{background:var(--green-deep); color:#F2FFF9; border-color:transparent}
+html[data-theme="dark"] .toast.red{background:#8E2A2E; color:#FFF3F3; border-color:transparent}
+html[data-theme="dark"] .switch .track::after{background:#0B1220}
+html[data-theme="dark"] .swatch{border-color:var(--line)}
+html[data-theme="dark"] .swatch.on{outline-color:var(--blue)}
+html[data-theme="dark"] .bar-track{background:var(--line)}
+html[data-theme="dark"] .pro-card{box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 14px 30px -18px rgba(0,0,0,.85)}
+html[data-theme="dark"] .auth-input .input:focus{border-color:var(--blue-light); background:rgba(255,255,255,.14)}
+
+
+/* ============================================================================
+   UX-law pass — the five rules this stylesheet now enforces on every screen
+   · Fitts     targets grow to 44–48 px wherever a finger is the pointer
+   · Hick      choice sets are grouped / collapsed (sidebar, filters, settings)
+   · Von Restorff  green = money in, blue = build/save, red = something breaks;
+                   one filled accent per screen, everything else stays quiet
+   · Zeigarnik open loops (setup steps, drafts, part-paid invoices) stay visible
+   · Jakob     familiar patterns: inline field errors, ⌘S, sectioned settings
+   ========================================================================== */
+
+/* ---------- Fitts: touch pointers get thumb-sized targets ------------------
+   Scoped to (pointer: coarse) so desktop density is untouched. Inputs go to
+   16px type, which also stops iOS zooming the page on focus. */
+@media (pointer: coarse) {
+  .btn, .chip, .seg button, .method { min-height: 44px; }
+  .btn.sm { min-height: 40px; }
+  .btn.icon { min-width: 44px; min-height: 44px; }
+  .btn.icon.sm { min-width: 40px; min-height: 40px; }
+  .btn.sm.icon { min-width: 40px; }
+  .swatch { width: 44px; height: 44px; }
+  .nav-item { min-height: 44px; }
+  .side-foot .uc-out { min-height: 36px; min-width: 36px; }
+  .bottomnav button { min-height: 54px; }
+  .input, select.input, textarea.input { min-height: 46px; font-size: 16px; }
+  .items-table .input { min-height: 44px; padding: 10px; }
+  .list-row { padding: 13px 18px; }
+  .table td { padding: 13px 14px; }
+  .modal-f .btn { flex: 1 1 auto; }
+  .pay-bar .btn { min-height: 48px; padding: 14px 22px !important; font-size: 15px; }
+}
+/* keyboard users always get a visible ring, never the default UA blob */
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---------- Hick: sidebar split into meaningfully-labelled groups --------- */
+.side-h {
+  display: flex; align-items: center; gap: 9px;
+  margin: 14px 12px 5px; font-size: 10px; font-weight: 800;
+  letter-spacing: .1em; text-transform: uppercase; color: #6C89AC;
+}
+.side-h i { flex: 1; height: 1px; background: rgba(255, 255, 255, .1); }
+.side-h:first-child { margin-top: 2px; }
+.nav-item .pill.warn { background: var(--red); color: #fff; }
+.nav-item .pill.zero { opacity: .45; }
+
+/* ---------- Hick: filter chips — 4 visible, the tail behind "More" --------
+   The hidden chips stay in the DOM (and in the accessibility tree once
+   revealed) so a filter is never *removed*, only de-noised. */
+#inv-chips .chip.hidden, #exp-chips .chip.hidden { display: none; }
+.chip.more { border-style: dashed; color: var(--ink); }
+.chip.more .n { font-size: 11px; font-weight: 800; opacity: .8 }
+.chip.more.open { background: var(--navy-700); border-color: var(--navy-700); color: #fff; border-style: solid }
+
+/* ---------- Hick: Settings as sections (Stripe / GitHub convention) ------- */
+.set-nav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px }
+.set-nav .seg { flex-wrap: wrap }
+.set-nav .seg button { min-width: 84px; justify-content: center }
+.set-count { font-size: 11.5px; color: var(--faint); font-weight: 700 }
+.set-card[hidden] { display: none !important }
+/* when one section is showing there is nothing to balance — go single column */
+.set-wrap.only .grid.two { grid-template-columns: 1fr }
+
+/* ---------- Von Restorff: one accent per screen, green reserved for money - */
+/* Pro used to shout in the same green as "money received", which flattened
+   every other green. It is now a quiet outline chip with a violet marker. */
+.pro-card button {
+  background: transparent; color: #CFE2F8; border: 1px solid rgba(255, 255, 255, .28);
+  box-shadow: none; padding: 8px;
+}
+.pro-card button:hover { background: rgba(255, 255, 255, .08); color: #fff; filter: none }
+.pro-card button svg { color: var(--violet) }
+.badge.pro { background: rgba(255, 255, 255, .14); color: #E7D9FF; box-shadow: inset 0 0 0 1px rgba(163, 149, 255, .5) }
+
+/* red appears only where something is broken or destructive */
+.btn.danger-solid { background: var(--red); color: #fff; box-shadow: 0 8px 20px -8px rgba(229, 72, 77, .7) }
+html[data-theme="dark"] .btn.danger-solid { color: #2A0507 }
+tr.row-overdue td:first-child { box-shadow: inset 3px 0 0 var(--red) }
+
+/* ---------- Zeigarnik: open loops that keep a slot on screen -------------- */
+.loop-card { border-left: 3px solid var(--blue) }
+.loop-card.done { border-left-color: var(--green) }
+.loop-h { display: flex; align-items: center; gap: 12px; padding: 15px 18px; border-bottom: 1px solid var(--line-2); flex-wrap: wrap }
+.loop-h h3 { font-size: 14.5px; font-weight: 700 }
+.loop-h .of { font-size: 12px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums }
+.prog { height: 8px; border-radius: 99px; background: var(--line-2); overflow: hidden; min-width: 90px }
+.prog i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--blue-light), var(--blue)); transition: width .35s ease }
+.prog.green i { background: linear-gradient(90deg, #3BE3A5, var(--green)) }
+.prog.amber i { background: linear-gradient(90deg, #FFD98A, var(--amber)) }
+.prog-line { display: flex; align-items: center; gap: 10px }
+.prog-line .prog { flex: 1 }
+.loop-steps { display: grid }
+.loop-step {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 11px 18px; border-bottom: 1px solid var(--line-2); transition: background .12s;
+}
+.loop-step:last-child { border-bottom: none }
+.loop-step:hover { background: var(--hover) }
+.loop-step .tick {
+  width: 22px; height: 22px; border-radius: 7px; flex: none; display: grid; place-items: center;
+  border: 2px solid var(--line); color: transparent; font-weight: 800;
+}
+.loop-step .tick svg { width: 13px; height: 13px }
+.loop-step.ok .tick { background: var(--green-soft); border-color: transparent; color: var(--green-dark) }
+.loop-step b { font-size: 13px; display: block }
+.loop-step.ok b { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px }
+.loop-step .go { margin-left: auto; color: var(--blue); display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700 }
+.loop-step.ok .go { color: var(--faint) }
+.loop-foot { padding: 12px 18px; font-size: 12px; color: var(--faint); border-top: 1px solid var(--line-2) }
+
+/* resume strip: half-finished work (drafts, part-paid) offered first */
+.resume { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 16px; margin-bottom: 18px;
+  background: var(--card); border: 1px dashed var(--blue); border-radius: 12px }
+.resume .rl { display: flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 700; color: var(--on-blue-soft) }
+.resume .rb { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 9px;
+  background: var(--blue-soft); color: var(--on-blue-soft); font-size: 12.5px; font-weight: 700; transition: filter .12s }
+.resume .rb:hover { filter: brightness(.96) }
+.resume .rb .tiny { font-weight: 600; color: var(--muted) }
+
+/* ---------- Jakob: inline validation (the field says it, not a toast) ----- */
+.input.bad, .input[aria-invalid="true"] { border-color: var(--red); box-shadow: 0 0 0 3px rgba(229, 72, 77, .14) }
+.field-err { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: var(--on-red-soft); margin-top: 5px }
+.field-err svg { width: 13px; height: 13px; flex: none }
+.form-err { display: flex; align-items: center; gap: 9px; padding: 10px 13px; border-radius: 10px;
+  background: var(--red-soft); color: var(--on-red-soft); font-size: 12.5px; font-weight: 700; margin-bottom: 14px }
+.form-err svg { width: 16px; height: 16px; flex: none }
+
+/* ---------- Jakob / Fitts: editor keeps its save buttons under the thumb -- */
+.editor-bar { display: none; position: sticky; bottom: 0; z-index: 22; gap: 10px; align-items: center;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); background: var(--card);
+  border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lg) }
+.editor-bar .tot { display: grid; gap: 1px; margin-right: auto }
+.editor-bar .tot .k { font-size: 10.5px; color: var(--faint); font-weight: 700; text-transform: uppercase; letter-spacing: .06em }
+.editor-bar .tot .v { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums }
+.editor-bar .btn { flex: 1 1 auto; min-height: 46px }
+.dirty-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: var(--on-amber-soft) }
+.dirty-dot i { width: 7px; height: 7px; border-radius: 50%; background: var(--amber) }
+
+@media (max-width: 760px) {
+  .editor-bar { display: flex }
+  #tb-actions.ed-dup { display: none }         /* never two competing save buttons */
+  .set-nav .seg button { min-width: 0; flex: 1 1 auto; padding: 5px 10px }
+  .set-nav .set-count { width: 100% }
+}
+
+/* ---------- Jakob: keyboard affordances ---------------------------------- */
+.kbd { display: inline-block; min-width: 20px; text-align: center; font: 700 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 2px 6px; border-radius: 6px; background: var(--seg-bg); color: var(--navy-700); border: 1px solid var(--line); box-shadow: 0 1px 0 var(--line) }
+.keys { display: grid; gap: 9px }
+.keys .kr { display: flex; align-items: center; gap: 10px; font-size: 13px }
+.keys .kr span { flex: 1; color: var(--muted) }
+.hotk { margin-left: 8px; opacity: .7 }
+
+/* ---------- motion & density preferences -------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important }
+}
+
+/* dark-mode parity for the new surfaces */
+html[data-theme="dark"] .resume { background: var(--panel) }
+html[data-theme="dark"] .resume .rb { background: rgba(11, 124, 255, .18); color: var(--blue-light) }
+html[data-theme="dark"] .loop-step .tick { border-color: var(--line) }
+html[data-theme="dark"] .prog { background: var(--line) }
+html[data-theme="dark"] .editor-bar .kbd, html[data-theme="dark"] .kbd { background: var(--seg-bg); border-color: var(--line) }
+
+/* ---------- labeled account control + undo affordance -------------------- */
+.tb-account { gap: 7px; padding: 3px 9px 3px 3px }
+.tb-account .tb-who { font-size: 12.5px; font-weight: 700; color: var(--ink) }
+.tb-account svg { width: 14px; height: 14px; color: var(--faint); margin-right: 2px }
+.toast-undo {
+  margin-left: 6px; padding: 5px 11px; border-radius: 8px; background: rgba(255, 255, 255, .16);
+  color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .02em; transition: background .15s;
+}
+.toast-undo:hover { background: rgba(255, 255, 255, .3) }
+@media (pointer: coarse) { .toast-undo { min-height: 36px; min-width: 60px } }
+
+/* ---------- additions backing the dashboard / list work -------------------- */
+/* setup rows are real <button>s, so clear the UA chrome first */
+.loop-card { margin-bottom: 18px }
+.loop-step {
+  background: transparent; color: inherit; font: inherit; cursor: pointer;
+  border-top: none; border-left: none; border-right: none;
+}
+.loop-step.next { background: var(--blue-soft) }
+.loop-step.next b { color: var(--on-blue-soft) }
+.loop-step.next .tick { border-color: var(--blue) }
+.loop-step.later { opacity: .7 }
+.loop-step.later .go { color: var(--faint) }
+/* the whole KPI card is the target (Fitts) — it deep-links straight to the work */
+.kpi-link { cursor: pointer; transition: transform .14s ease, box-shadow .14s ease }
+.kpi-link:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg) }
+.list-row.lr-overdue { box-shadow: inset 3px 0 0 var(--red) }
+/* red text is reserved for the date of something already late */
+.od { color: var(--red); font-weight: 700 }
+
+
+
+
+

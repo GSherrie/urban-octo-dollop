@@ -20,7 +20,7 @@
     {
       "label": "Run all tests",
       "type": "shell",
-      "command": "node smoke.js && node test-ui.js && node test-suite.js && node test-mobile.js",
+      "command": "node smoke.js && node test-ui.js && node test-suite.js && node test-ux.js && node test-pay-config.js && node test-upgrade-payments.js && node test-momo-upgrade.js && node test-mobile.js",
       "options": { "cwd": "${workspaceFolder}/tests" },
       "group": "test",
       "problemMatcher": []

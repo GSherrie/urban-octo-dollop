@@ -9,7 +9,7 @@ function makeEl(tag) {
     addEventListener() {}, removeEventListener() {}, dispatchEvent() {},
     appendChild() {}, remove() {}, closest() { return null; }, contains() { return true; },
     querySelector() { return makeEl(); }, querySelectorAll() { return []; },
-    setAttribute() {}, getAttribute() { return null; }, focus() {}, click() {},
+    setAttribute() {}, removeAttribute() {}, getAttribute() { return null; }, focus() {}, click() {},
   };
   Object.defineProperty(e, 'innerHTML', { get() { return this._html; }, set(v) { this._html = v; } });
   Object.defineProperty(e, 'textContent', { get() { return this._text; }, set(v) { this._text = v; } });
@@ -21,6 +21,8 @@ global.document = {
   getElementById(id) { return byId[id] || (byId[id] = makeEl()); },
   querySelector() { return makeEl(); }, querySelectorAll() { return []; },
   createElement(t) { return makeEl(t); },
+  // the theme layer writes html[data-theme]; the shim needs an <html> to write it on
+  documentElement: makeEl('html'),
   body: makeEl('body'),
 };
 global.window = global;

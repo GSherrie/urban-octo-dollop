@@ -39,28 +39,104 @@ window.UI = (function () {
     sync: '<path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M3 21v-5h5"/><path d="M21 3v5h-5"/>',
     file: '<path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/>',
     card: '<rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/>',
-    more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'
+    more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.6 7.6 0 0 1 15 0"/>',
+    login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+    logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+    shield: '<path d="M12 2 4.5 5v6.5c0 5 3.2 8.4 7.5 10.5 4.3-2.1 7.5-5.5 7.5-10.5V5z"/>',
+    star: '<path d="m12 2 3 6.5 7 .9-5.2 4.8L18 22l-6-3.4L6 22l1.2-7.8L2 9.4l7-.9z"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/>',
+    sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 8 5-5 5 5"/><path d="M12 3v12"/>',
+    video: '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m22 9-6 3 6 3z"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8.1v.1"/>',
+    cloud: '<path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97 6 6 0 0 0-11.8 1.6A4 4 0 0 0 6.5 19z"/>',
+    cloudOff: '<path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97 6 6 0 0 0-9-3.2"/><path d="M6.2 7.7A6 6 0 0 0 6.5 19h9"/><path d="m3 3 18 18"/>',
+    book: '<path d="M2 4.5A2.5 2.5 0 0 1 4.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H4.5A2.5 2.5 0 0 1 2 19.5z"/><path d="M2 17.5A2.5 2.5 0 0 1 4.5 15H20"/>',
+    receipt: '<path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-2.5-1.5L14 21l-2.5-1.5L9 21l-2.5-1.5z"/><path d="M9 8h6M9 12h6"/>'
   };
   function icon(name, cls) {
     return '<svg class="' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[name] || '') + '</svg>';
   }
 
-  /* ---------------- nav config ---------------- */
+  /* ---------------- theme (light / dark / system) ----------------
+     Single home for theme logic so the shell, the Account ▸ Preferences chips and boot
+     all agree. The preference lives in db.settings.preferences.theme; styles.css keys
+     every dark palette off html[data-theme="dark"]. "system" follows the OS via
+     matchMedia and re-applies live when the OS appearance changes. */
+  const systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function themePref() {
+    try { return (S.db.settings.preferences && S.db.settings.preferences.theme) || 'system'; } catch (e) { return 'system'; }
+  }
+  function isDark() { const t = themePref(); return t === 'dark' || (t === 'system' && !!(systemDark && systemDark.matches)); }
+  function applyTheme(t) {
+    try {
+      const prefs = S.db.settings.preferences || (S.db.settings.preferences = {});
+      prefs.theme = t; S.save();
+    } catch (e) { return; }
+    if (isDark()) document.documentElement.setAttribute('data-theme', 'dark');
+    else document.documentElement.removeAttribute('data-theme');
+    /* mirror to a shared key so the Next.js variant boots with the same palette */
+    try { localStorage.setItem('sherpay_theme', t); } catch (e) { /* private mode — db copy is the source of truth */ }
+    /* keep <meta name="theme-color"> (status bar / PWA chrome) in step with the palette */
+    const mc = document.querySelector('meta[name="theme-color"]');
+    if (mc) mc.setAttribute('content', isDark() ? '#0B1220' : '#06244B');
+  }
+  function watchSystemTheme() {
+    if (!systemDark) return;
+    const onChange = () => { if (themePref() === 'system') applyTheme('system'); };
+    if (systemDark.addEventListener) systemDark.addEventListener('change', onChange);
+    else if (systemDark.addListener) systemDark.addListener(onChange);
+  }
+
+  /* ---------------- nav config ----------------
+     Eight sibling links with equal weight is a Hick violation: every visit
+     means re-reading eight labels before choosing. They are now declared in
+     three named groups, so the eye gets a category first and only compares
+     2–4 items inside it. The grouping is presentational only — routes,
+     data-route attributes and the mobile tab bar are unchanged. */
   const NAV = [
-    { route: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { route: 'invoices', label: 'Invoices', icon: 'invoice' },
-    { route: 'clients', label: 'Clients', icon: 'clients' },
-    { route: 'expenses', label: 'Expenses', icon: 'expenses' },
-    { route: 'time', label: 'Time Tracking', icon: 'time' },
-    { route: 'reports', label: 'Reports', icon: 'reports' },
-    { route: 'settings', label: 'Settings', icon: 'settings' },
-    { route: 'account', label: 'Account', icon: 'settings' }
+    { route: 'dashboard', label: 'Dashboard', icon: 'dashboard', group: 'Overview' },
+    { route: 'invoices', label: 'Invoices', icon: 'invoice', group: 'Daily' },
+    { route: 'clients', label: 'Clients', icon: 'clients', group: 'Daily' },
+    { route: 'expenses', label: 'Expenses', icon: 'expenses', group: 'Daily' },
+    { route: 'time', label: 'Time Tracking', icon: 'time', group: 'Daily' },
+    { route: 'reports', label: 'Reports', icon: 'reports', group: 'Workspace' },
+    { route: 'settings', label: 'Settings', icon: 'settings', group: 'Workspace' },
+    { route: 'account', label: 'Account', icon: 'user', group: 'Workspace' }
   ];
   const MOBILE_NAV = ['dashboard', 'invoices', 'clients', 'expenses', 'more'];
+
+  /* open-loop counters live on the nav so unfinished work is visible from
+     anywhere; overdue flips the pill to the single "something is wrong" red */
+  function navCounters() {
+    const open = S.db.invoices.filter((i) => ['sent', 'viewed'].includes(S.displayStatus(i)) || S.displayStatus(i) === 'overdue' || S.displayStatus(i) === 'partial').length;
+    const overdue = S.db.invoices.filter((i) => S.displayStatus(i) === 'overdue').length;
+    return { invoices: open, overdue: overdue };
+  }
+  function navHtml(active) {
+    const c = navCounters();
+    let html = '', group = '';
+    NAV.forEach((n) => {
+      if (n.group !== group) { group = n.group; html += '<div class="side-h">' + group + '<i></i></div>'; }
+      const isActive = active === n.route;
+      const pill = n.route === 'invoices' && c.invoices
+        ? '<span class="pill' + (c.overdue ? ' warn' : '') + '" title="' + c.invoices + ' awaiting payment' + (c.overdue ? ' · ' + c.overdue + ' overdue' : '') + '">' + c.invoices + '</span>'
+        : '';
+      html += '<button class="nav-item' + (isActive ? ' active' : '') + '"' + (isActive ? ' aria-current="page"' : '') +
+        ' data-action="nav" data-route="' + n.route + '">' + icon(n.icon) + '<span>' + n.label + '</span>' + pill + '</button>';
+    });
+    return html;
+  }
 
   /* ---------------- router & shell ---------------- */
   let currentView = null, currentActions = {}, route = '';
   let lastRenderedHash = null;
+  /* A view can claim navigation before it happens (unsaved editor work). The
+     guard returns true when it handled the prompt itself. Reset on every
+     render so a detached view can never block the app. */
+  let navGuard = null;
+  function setNavGuard(fn) { navGuard = typeof fn === 'function' ? fn : null; }
 
   function parseRoute() {
     const h = (location.hash || '#/dashboard').replace(/^#\/?/, '');
@@ -69,14 +145,81 @@ window.UI = (function () {
   function go(hash) { location.hash = hash; }
 
   function start() {
+    /* paint the saved theme (light/dark/system) before the first shell render,
+       and follow OS appearance live while "system" is selected */
+    applyTheme(themePref());
+    watchSystemTheme();
     window.addEventListener('hashchange', render);
     document.addEventListener('click', onDocClick);
+    document.addEventListener('keydown', onGlobalKey);
     touchAssist();
     dragAssist();
     window.addEventListener('online', () => { toast('Back online', 'green', 'sync'); setOnline(); });
     window.addEventListener('offline', () => { toast('Offline mode — drafts saved locally', 'amber', 'alert'); setOnline(); });
     dataNotice();
+    dataRescueNotice();
+    /* A cloud session that stopped authenticating must be said out loud too —
+       local saving keeps working, so silence reads as "everything is backed up". */
+    if (S.cloud && S.cloud.onSessionExpired) {
+      S.cloud.onSessionExpired(() => alertError('Cloud sync stopped',
+        'Your SherPay cloud session expired, so this workspace is no longer syncing to your account. Nothing you typed is lost — it is saved on this device. Open Account and sign in again to resume syncing.'));
+    }
     render();
+  }
+  /* Corrupt or unreadable saved data is a stop condition, not a toast: the
+     person must know the empty workspace in front of them is not the one they
+     built, before they spend an hour rebuilding it. */
+  function dataRescueNotice() {
+    if (!S.dataError || !S.dataError()) return;
+    alertError('We could not open your saved workspace',
+      'SherPay found saved data but could not read it (' + S.dataError() + '), so this session started empty. Nothing was deleted — reload before you create anything new.');
+  }
+
+  /* ---------------- keyboard (Jakob: the shortcuts people already expect) --
+     ⌘/Ctrl+S saves whatever the open view can save, ⌘/Ctrl+K and / jump to the
+     invoice search, n starts the view's primary object, ? lists them all.
+     Nothing fires while typing or while a dialog owns the page. */
+  const SHORTCUTS = [
+    ['⌘/Ctrl S', 'Save what is on screen'],
+    ['⌘/Ctrl K  or  /', 'Find an invoice'],
+    ['n', 'New invoice (or new client / expense here)'],
+    ['?', 'This list'],
+    ['Esc', 'Close a dialog']
+  ];
+  function onGlobalKey(e) {
+    const t = e.target || {};
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '') || t.isContentEditable;
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && (e.key === 's' || e.key === 'S')) {
+      const save = currentActions.save || currentActions['save-client'] || currentActions['save-expense'];
+      if (save) { e.preventDefault(); save({}, null, e); }
+      return;
+    }
+    if (mod && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); focusSearch(); return; }
+    if (typing || mod || e.altKey) return;
+    if (document.querySelector('.modal-backdrop')) {
+      if (e.key === '?') { e.preventDefault(); closeModal(); shortcutsModal(); }
+      return;
+    }
+    if (e.key === '?') { e.preventDefault(); shortcutsModal(); return; }
+    if (e.key === '/') { e.preventDefault(); focusSearch(); return; }
+    if (e.key === 'n' || e.key === 'N') {
+      const fn = currentActions['new-invoice'] || currentActions.add;
+      if (fn) { e.preventDefault(); fn({}, null, e); }
+    }
+  }
+  function focusSearch() {
+    const q = document.getElementById('inv-q');
+    if (q) { q.focus(); q.select(); return; }
+    go('#/invoices');
+    setTimeout(() => { const el = document.getElementById('inv-q'); if (el) { el.focus(); el.select(); } }, 80);
+  }
+  function shortcutsModal() {
+    openModal({
+      title: 'Keyboard shortcuts',
+      body: '<div class="keys">' + SHORTCUTS.map((s) => '<div class="kr"><span>' + s[1] + '</span><kbd class="kbd">' + S.esc(s[0]) + '</kbd></div>').join('') + '</div>',
+      footer: '<button class="btn primary" data-action="close-modal">Got it</button>'
+    });
   }
 
   /* ---------------- first-run transparency notice ----------------
@@ -152,6 +295,13 @@ window.UI = (function () {
     lastRenderedHash = hash;
     const parts = parseRoute();
     route = parts[0] || 'dashboard';
+    /* Tell the shell where we really are: the invoice editor is its own place,
+       because on a phone its action bar takes over the bottom of the screen and
+       the tab bar has to step aside there — and only there. */
+    if (document.body) {
+      const editing = route === 'invoices' && (parts[1] === 'new' || parts[2] === 'edit');
+      document.body.dataset.route = editing ? 'invoices-' + (parts[1] === 'new' ? 'new' : 'edit') : route;
+    }
     const app = document.getElementById('app');
     const viewFn = VIEWS[route] || VIEWS.dashboard;
 
@@ -161,22 +311,19 @@ window.UI = (function () {
     app.innerHTML =
       '<aside class="sidebar">' +
         '<div class="brand"><img src="assets/logo.png" alt="SherPay"><div><div class="brand-name">SherPay</div><div class="brand-tag">Invoice · Get paid</div></div></div>' +
-        '<nav class="nav">' + NAV.map((n) =>
-          '<button class="nav-item' + (route === n.route ? ' active' : '') + '" data-action="nav" data-route="' + n.route + '">' + icon(n.icon) + '<span>' + n.label + '</span>' +
-          (n.route === 'invoices' ? '<span class="pill">' + S.db.invoices.filter((i) => ['sent', 'viewed'].includes(S.displayStatus(i)) || S.displayStatus(i) === 'overdue' || S.displayStatus(i) === 'partial').length + '</span>' : '') +
-          '</button>').join('') + '</nav>' +
+        '<nav class="nav" aria-label="Main">' + navHtml(route) + '</nav>' +
         '<div class="side-foot">' +
           '<div class="online-dot" id="online-ind"><i></i><span>Connection status</span></div>' +
           '<div class="user-chip" id="user-chip">' + avatar(S.Auth.current().name) +
             '<div class="uc-meta"><b>' + S.esc(S.Auth.current().name) + '</b><span>' + S.esc(S.Auth.current().email) + '</span></div>' +
-            '<button class="uc-out" data-action="signout" title="Sign out" aria-label="Sign out">' + icon('lock') + '</button>' +
+            '<button class="uc-out" data-action="signout" title="Sign out" aria-label="Sign out">' + icon('logout') + '</button>' +
           '</div>' +
-          '<div class="pro-card" style="margin-top:10px"><b>' + icon('lock') + ' SherPay Pro</b><p>Mileage GPS tracker, inventory, client portal & QuickBooks/Xero sync.</p><button data-action="pro">Upgrade</button></div>' +
+          '<div class="pro-card" style="margin-top:10px"><b>' + icon('star') + ' SherPay Pro' + (S.upgrades.isPro() ? ' <span class="badge paid">Active</span>' : '') + '</b><p>Mileage GPS tracker, inventory, client portal & QuickBooks/Xero sync.</p><button data-action="pro">' + (S.upgrades.isPro() ? 'View Pro' : 'Pay ' + S.fmtMoney(S.upgrades.price('pro').amount, 'GHS') + ' \u00b7 MoMo') + '</button></div>' +
         '</div>' +
       '</aside>' +
       '<div class="main">' +
         '<header class="topbar"><div><h1 id="tb-title"></h1><div class="sub" id="tb-sub"></div></div><div class="spacer"></div><div class="row" id="tb-actions"></div>' +
-          '<button class="tb-account" data-action="account" title="Account" aria-label="Your account">' + avatar(S.Auth.current().name) + '</button>' +
+          accountChip() +
         '</header>' +
         '<div id="view"></div>' +
       '</div>' +
@@ -191,6 +338,7 @@ window.UI = (function () {
     const root = document.getElementById('view');
     root.innerHTML = currentView.html;
     currentActions = currentView.actions || {};
+    navGuard = null;                       // the fresh view has not asked for any guard yet
     setTopbar(currentView.title || '', currentView.sub || '', currentView.topActions || '');
     if (currentView.mount) currentView.mount(root);
     document.title = 'SherPay — ' + (currentView.title || 'Invoicing');
@@ -281,7 +429,10 @@ window.UI = (function () {
     const el = e.target.closest('[data-action]');
     if (!el) return;
     const name = el.dataset.action;
-    if (name === 'nav') { go('#/' + el.dataset.route); return; }
+    if (name === 'nav') {
+      if (navGuard && navGuard(el.dataset.route, el)) return;   // view asked to be asked first
+      go('#/' + el.dataset.route); return;
+    }
     if (name === 'moresheet') { moreSheet(); return; }
     if (name === 'pro') { proModal(); return; }
     if (name === 'account') { accountModal(); return; }
@@ -298,43 +449,112 @@ window.UI = (function () {
       title: 'More',
       body: '<div class="grid" style="gap:8px">' +
         [['time', 'time', 'Time Tracking', 'Stopwatch & billable hours'], ['reports', 'reports', 'Reports', 'P&L, tax summary, exports'], ['settings', 'settings', 'Settings', 'Branding, taxes, numbering, reminders']]
-          .map((x) => '<button class="method" data-action="nav" data-route="' + x[0] + '" onclick="UI.closeModal()"><span class="mico" style="background:var(--navy-700)">' + icon(x[1]) + '</span><span><b>' + x[2] + '</b><div class="tiny muted">' + x[3] + '</div></span></button>').join('') +
+          .map((x) => '<button class="method" data-action="nav" data-route="' + x[0] + '" onclick="UI.closeModal()"><span class="mico" style="background:var(--navy-800)">' + icon(x[1]) + '</span><span><b>' + x[2] + '</b><div class="tiny muted">' + x[3] + '</div></span></button>').join('') +
         '</div>',
       footer: ''
     });
     document.querySelectorAll('#modal-root .mico svg').forEach((s) => { s.setAttribute('width', '18'); s.setAttribute('height', '18'); s.style.stroke = '#fff'; });
   }
 
+  /* The Pro offer. One thing changed here and it matters: "Join waitlist" was a
+     dead end. Pro is now bought with Mobile Money on upgrade.html, and what
+     comes back is a PAYMENT REFERENCE — which means this sheet also has to be
+     where you come back to when a payment is half finished (page closed, phone
+     died, network dropped mid-approval). The resume rows below are that place:
+     the reference, a way back to the wallet prompt, and "I've paid — check",
+     which asks Paystack and nothing else. */
   function proModal() {
+    const plan = S.upgrades.state();
+    const price = S.upgrades.price('pro');
+    const open = S.upgrades.resumeRefs().filter((r) => r.status !== 'paid');
+    const cost = S.fmtMoney(price.amount, price.currency);
+    const rows = open.map((r) =>
+      '<div class="card card-b mt" data-ref="' + S.esc(r.ref) + '">' +
+        '<b class="small">Payment started on this device</b>' +
+        '<div class="mono tiny mt">' + S.esc(r.ref) + '</div>' +
+        '<div class="tiny muted mt">' + S.esc(cost) + ' \u00b7 ' + S.esc(r.provider || 'Mobile Money') +
+          (r.account ? ' \u00b7 ' + S.esc(r.account) : '') + ' \u00b7 Pro unlocks when Paystack confirms this reference.</div>' +
+        '<div class="row mt" style="gap:8px;flex-wrap:wrap">' +
+          '<button class="btn sm ghost" data-copy-ref>' + icon('copy') + 'Copy reference</button>' +
+          (r.checkout_url ? '<a class="btn sm ghost" href="' + S.esc(r.checkout_url) + '" target="_blank" rel="noopener">Open payment</a>' : '') +
+          '<a class="btn sm primary" href="' + S.esc(S.upgrades.link()) + '">Continue payment</a>' +
+          '<button class="btn sm ghost" data-check-ref>' + icon('sync') + 'I\u2019ve paid \u2014 check</button>' +
+        '</div>' +
+        '<div class="tiny muted mt" data-check-status role="status"></div>' +
+      '</div>').join('');
     openModal({
       title: 'SherPay Pro',
-      body: '<p class="muted small mb">These power features ship with the Pro tier. Your MVP core loop (create → send → track → scan → export) is fully live on this plan.</p>' +
+      body: (plan.tier === 'pro'
+        ? '<p class="muted small mb">Pro is unlocked on this account' +
+            (plan.paid_at ? ' since ' + S.esc(S.fmtDate(String(plan.paid_at).slice(0, 10))) : '') +
+            '. Payment reference <code class="mono">' + S.esc(plan.ref || '\u2014') + '</code>.</p>'
+        : '<p class="muted small mb">' + cost + ' once covers ' + price.months + ' months, paid from your MTN MoMo, Telecel Cash or AT Money wallet. You approve the payment on your phone \u2014 SherPay never asks for your wallet PIN.</p>') +
         [['gps', 'Mileage Tracker', 'GPS business-drive logging for tax write-offs'],
          ['box', 'Inventory Management', 'Stock levels auto-deducted on invoicing'],
          ['clients', 'Client Portal', 'Secure login for clients to view & pay invoices'],
          ['sync', 'Accounting Sync', 'Two-way sync with QuickBooks, Xero, FreshBooks, Wave'],
          ['lock', 'Biometric Login', 'FaceID / fingerprint unlock on mobile']]
-          .map((x) => '<div class="lock-row"><span class="ico">' + icon(x[0]) + '</span><div><b class="small">' + x[1] + ' <span class="badge pro">PRO</span></b><div class="tiny muted">' + x[2] + '</div></div></div>').join(''),
-      footer: '<button class="btn ghost" data-action="close-modal">Maybe later</button><button class="btn primary" data-action="close-modal">Join waitlist</button>'
+          .map((x) => '<div class="lock-row"><span class="ico">' + icon(x[0]) + '</span><div><b class="small">' + x[1] + ' <span class="badge pro">PRO</span></b><div class="tiny muted">' + x[2] + '</div></div></div>').join('') +
+        rows,
+      footer: plan.tier === 'pro'
+        ? '<button class="btn primary" data-action="close-modal">Done</button>'
+        : '<button class="btn ghost" data-action="close-modal">Maybe later</button>' +
+          '<button class="btn primary" id="pro-pay-momo">' + icon('wallet') + ' Pay ' + cost + ' with Mobile Money</button>',
+      mount: (modal) => {
+        const go = modal.querySelector('#pro-pay-momo');
+        if (go) go.addEventListener('click', () => { location.href = S.upgrades.link(); });
+        modal.querySelectorAll('[data-ref]').forEach((box) => {
+          const ref = box.getAttribute('data-ref') || '';
+          const cp = box.querySelector('[data-copy-ref]');
+          if (cp) cp.addEventListener('click', () => {
+            copyText(ref).then((ok) => toast(ok ? 'Payment reference copied' : 'Could not copy the reference', ok ? 'green' : 'amber', ok ? 'copy' : 'alert'));
+          });
+          const chk = box.querySelector('[data-check-ref]');
+          if (chk) chk.addEventListener('click', async () => {
+            const note = box.querySelector('[data-check-status]');
+            chk.disabled = true;
+            if (note) note.textContent = 'Checking with Paystack\u2026';
+            try {
+              await S.upgrades.sync();
+              if (S.upgrades.isPro()) { closeModal(); render(true); toast('SherPay Pro is active', 'green', 'star'); }
+              else { if (note) note.textContent = 'Still pending. Approve the prompt on your phone, then check again.'; chk.disabled = false; }
+            } catch (e) {
+              if (note) note.textContent = (e && e.message) || 'Could not reach SherPay. Try again.';
+              chk.disabled = false;
+            }
+          });
+        });
+      }
     });
+    document.querySelectorAll('#modal-root .ico svg').forEach((s) => { s.setAttribute('width', '18'); s.setAttribute('height', '18'); });
   }
 
-  /* ---------------- account (top-right avatar) ---------------- */
+  /* ---------------- account (top-right) ----------------
+     Labeled, not icon-only: an avatar alone makes people guess. The name and a
+     chevron say "this is you, and it opens something". */
+  function accountChip() {
+    const u = S.Auth.current() || {};
+    const first = String(u.name || 'Account').split(' ')[0];
+    return '<button class="tb-account" data-action="account" title="Your account" aria-label="Your account — ' + S.esc(u.name || 'Account') + '">' +
+      avatar(u.name) + '<span class="tb-who hide-sm">' + S.esc(first) + '</span>' + icon('chevronDown') + '</button>';
+  }
+
   function accountModal() {
     const u = S.Auth.current();
     if (!u) return;
+    const plan = S.upgrades.isPro() ? 'PRO' : 'FREE';
     openModal({
       title: 'Account',
       body:
         '<div class="acct-head">' + avatar(u.name) +
           '<div class="acct-meta"><b>' + S.esc(u.name) + '</b><span>' + S.esc(u.email) + '</span></div>' +
-          '<span class="badge plan">FREE</span>' +
+          '<span class="badge plan">' + plan + '</span>' +
         '</div>' +
         '<div class="grid" style="gap:8px">' +
-          '<button class="method" data-action="acct-settings"><span class="mico" style="background:var(--navy-700)">' + icon('settings') + '</span><span><b>Settings</b><div class="tiny muted">Branding, taxes, numbering, reminders</div></span></button>' +
-          '<button class="method" data-action="acct-pro"><span class="mico" style="background:#7C3AED">' + icon('lock') + '</span><span><b>SherPay Pro</b><div class="tiny muted">Mileage, inventory, client portal & accounting sync</div></span></button>' +
+          '<button class="method" data-action="acct-settings"><span class="mico" style="background:var(--navy-800)">' + icon('settings') + '</span><span><b>Settings</b><div class="tiny muted">Branding, taxes, numbering, reminders</div></span></button>' +
+          '<button class="method" data-action="acct-pro"><span class="mico" style="background:#7C3AED">' + icon('star') + '</span><span><b>SherPay Pro</b><div class="tiny muted">Mileage, inventory, client portal & accounting sync</div></span></button>' +
         '</div>',
-      footer: '<button class="btn ghost" data-action="close-modal">Close</button><button class="btn danger" data-action="signout">' + icon('lock') + ' Sign out</button>'
+      footer: '<button class="btn ghost" data-action="close-modal">Close</button><button class="btn danger" data-action="signout">' + icon('logout') + ' Sign out</button>'
     });
     document.querySelectorAll('#modal-root .mico svg').forEach((s) => { s.setAttribute('width', '18'); s.setAttribute('height', '18'); s.style.stroke = '#fff'; });
   }
@@ -379,6 +599,16 @@ window.UI = (function () {
       mount: (m) => m.querySelector('#cf-yes').addEventListener('click', () => { closeModal(); onYes(); })
     });
   }
+  /* A stop notice, not a toast: things like an expired session or a failed sync
+     must be acknowledged, because a toast that fades away teaches nothing and
+     the person keeps working in an app that is no longer saving. */
+  function alertError(title, message) {
+    openModal({
+      title: title || 'Something went wrong',
+      body: '<p class="muted">' + S.esc(String(message || 'Please try again.')) + '</p>',
+      footer: '<button class="btn primary" data-action="close-modal">OK</button>'
+    });
+  }
 
   /* ---------------- clipboard (with fallback for iframes / non-secure contexts) ---------------- */
   function copyText(text) {
@@ -397,14 +627,35 @@ window.UI = (function () {
     } catch (e) { return false; }
   }
 
-  /* ---------------- toast ---------------- */
-  function toast(msg, kind, ic) {
+  /* ---------------- toast ----------------
+     `opts.undo` turns a toast from a receipt into a safety net: any action can
+     hand us its inverse and give the person six seconds to change their mind.
+     That is what makes a one-tap Delete or Mark paid feel safe to try. */
+  function toast(msg, kind, ic, opts) {
+    opts = opts || {};
     const root = document.getElementById('toast-root');
+    if (!root) return null;
     const el = document.createElement('div');
     el.className = 'toast ' + (kind || '');
+    el.setAttribute('role', 'status');
     el.innerHTML = icon(ic || (kind === 'green' ? 'check' : kind === 'red' ? 'alert' : 'bell')) + '<span>' + S.esc(msg) + '</span>';
+    let alive = true, timer = null;
+    const close = () => {
+      if (!alive) return;
+      alive = false;
+      el.style.opacity = '0'; el.style.transition = 'opacity .3s';
+      setTimeout(() => { if (el.parentNode) el.remove(); }, 320);
+    };
+    if (typeof opts.undo === 'function') {
+      const b = document.createElement('button');
+      b.className = 'toast-undo'; b.type = 'button';
+      b.textContent = opts.undoLabel || 'Undo';
+      b.addEventListener('click', () => { clearTimeout(timer); if (el.parentNode) el.remove(); alive = false; opts.undo(); });
+      el.appendChild(b);
+    }
     root.appendChild(el);
-    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, 3200);
+    timer = setTimeout(close, opts.ms || (typeof opts.undo === 'function' ? 6000 : 3200));
+    return { close: close };
   }
 
   /* ---------------- shared bits ---------------- */
@@ -444,8 +695,8 @@ window.UI = (function () {
       arcs += '<path d="M ' + x0 + ' ' + y0 + ' A 44 44 0 ' + large + ' 1 ' + x1 + ' ' + y1 + '" stroke="' + colors[k] + '" stroke-width="16" fill="none"><title>' + S.STATUS_LABEL[k] + ': ' + v + '</title></path>';
       a0 = a1;
     });
-    return '<svg viewBox="0 0 120 120" style="width:132px;height:132px">' + arcs + '<text x="60" y="57" text-anchor="middle" font-size="21" font-weight="800" fill="#0F1B2D">' + total + '</text><text x="60" y="72" text-anchor="middle" font-size="9.5" fill="#8A97A8" font-weight="700">INVOICES</text></svg>';
+    return '<svg viewBox="0 0 120 120" style="width:132px;height:132px">' + arcs + '<text x="60" y="57" text-anchor="middle" font-size="21" font-weight="800" fill="var(--ink,#0F1B2D)">' + total + '</text><text x="60" y="72" text-anchor="middle" font-size="9.5" fill="var(--faint,#8A97A8)" font-weight="700">INVOICES</text></svg>';
   }
 
-  return { icon, go, start, render: rerender, dismissSplash, setTopbar, openModal, closeModal, confirmDialog, toast, copyText, avatar, badge, barChart, donut, get route() { return route; }, VIEWS: (window.VIEWS = window.VIEWS || {}) };
+  return { icon, go, start, render: rerender, dismissSplash, setTopbar, openModal, closeModal, confirmDialog, alertError, toast, copyText, avatar, badge, barChart, donut, applyTheme, themePref, isDark, setNavGuard, shortcutsModal, get route() { return route; }, VIEWS: (window.VIEWS = window.VIEWS || {}) };
 })();

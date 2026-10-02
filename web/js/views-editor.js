@@ -32,15 +32,21 @@
     }
     UI.__prefillClient = null;
 
+    /* Loss prevention (Jakob): the editor knows when it is holding work that
+       does not exist on disk yet, and says so before you walk away. */
+    let dirty = false;
+    function markDirty() { dirty = true; }
+    function clearDirty() { dirty = false; UI.setNavGuard(null); }
+
     function totals() { return S.computeTotals(draft); }
 
     function itemsHtml() {
       return draft.items.map((it, ix) =>
-        '<tr><td style="width:52%"><input class="input" data-f="desc" data-ix="' + ix + '" placeholder="Description of product or service" value="' + esc(it.desc) + '"></td>' +
-        '<td style="width:12%"><input class="input" data-f="qty" data-ix="' + ix + '" type="number" min="0" step="0.01" value="' + it.qty + '"></td>' +
-        '<td style="width:20%"><input class="input" data-f="price" data-ix="' + ix + '" type="number" min="0" step="0.01" value="' + it.price + '"></td>' +
+        '<tr><td style="width:52%"><input class="input" data-f="desc" data-ix="' + ix + '" autocomplete="off" placeholder="Description of product or service" aria-label="Line ' + (ix + 1) + ' description" value="' + esc(it.desc) + '"></td>' +
+        '<td style="width:12%"><input class="input" data-f="qty" data-ix="' + ix + '" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Line ' + (ix + 1) + ' quantity" value="' + it.qty + '"></td>' +
+        '<td style="width:20%"><input class="input" data-f="price" data-ix="' + ix + '" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Line ' + (ix + 1) + ' unit price in ' + draft.currency + '" value="' + it.price + '"></td>' +
         '<td class="amt right tnum small">' + S.fmtMoney(S.num(it.qty) * S.num(it.price), draft.currency) + '</td>' +
-        '<td style="width:38px"><button class="btn icon ghost" data-action="rm-item" data-ix="' + ix + '" title="Remove">' + icon('x') + '</button></td></tr>'
+        '<td style="width:38px"><button class="btn icon ghost" data-action="rm-item" data-ix="' + ix + '" title="Remove" aria-label="Remove line ' + (ix + 1) + '">' + icon('x') + '</button></td></tr>'
       ).join('');
     }
     function totalsHtml() {
@@ -53,7 +59,14 @@
     }
     function refresh(root) {
       root.querySelector('#ed-items').innerHTML = itemsHtml();
-      root.querySelector('#ed-totals').innerHTML = totalsHtml();
+      paintTotals(root);
+    }
+    /* one paint for both totals surfaces: the panel on desktop, the bar on a phone */
+    function paintTotals(root) {
+      const box = root.querySelector('#ed-totals');
+      if (box) box.innerHTML = totalsHtml();
+      const bar = root.querySelector('#ed-bar-total');
+      if (bar) bar.textContent = S.fmtMoney(totals().total, draft.currency);
     }
 
     return {
@@ -79,6 +92,14 @@
             '</div></div>' +
           '</div>' +
           '<div class="card"><div class="card-b"><label class="f">Notes & payment terms (shown on invoice)</label><textarea id="ed-notes" class="input">' + esc(draft.notes) + '</textarea></div></div>' +
+          /* Fitts + Jakob: on a phone the thumb reaches the bottom of the screen,
+             so Save lives there with the total it produces — not up in the header,
+             and the header stays clear of the status bar. Hidden ≥761px. */
+          '<div class="editor-bar" id="ed-bar">' +
+            '<div class="tot"><span class="k">Total</span><span class="v tnum" id="ed-bar-total">' + S.fmtMoney(totals().total, draft.currency) + '</span></div>' +
+            '<button class="btn ghost" data-action="save">' + icon('check') + 'Save draft</button>' +
+            '<button class="btn primary" data-action="save-send">' + icon('send') + 'Save &amp; send</button>' +
+          '</div>' +
         '</div>',
       mount: (root) => {
         root.querySelector('#ed-client').addEventListener('change', (e) => {
@@ -99,7 +120,7 @@
           draft.items[ix][f] = f === 'desc' ? e.target.value : S.num(e.target.value);
           const row = e.target.closest('tr');
           row.querySelector('.amt').textContent = S.fmtMoney(S.num(draft.items[ix].qty) * S.num(draft.items[ix].price), draft.currency);
-          root.querySelector('#ed-totals').innerHTML = totalsHtml();
+          paintTotals(root);
         });
 
         function segBind(sel, field) {
@@ -122,16 +143,32 @@
           let tv = tm.parentElement.querySelector('#ed-taxval');
           if (draft.taxMode === 'none' && tv) tv.remove();
           if (draft.taxMode !== 'none' && !tv) { tv = document.createElement('input'); tv.id = 'ed-taxval'; tv.className = 'input'; tv.style.maxWidth = '110px'; tv.type = 'number'; tv.value = draft.taxValue; tm.parentElement.appendChild(tv); }
-          root.querySelector('#ed-totals').innerHTML = totalsHtml();
+          paintTotals(root);
         }
         root.addEventListener('input', (e) => {
-          if (e.target.id === 'ed-discval') { draft.discountValue = S.num(e.target.value); root.querySelector('#ed-totals').innerHTML = totalsHtml(); }
-          if (e.target.id === 'ed-taxval') { draft.taxValue = S.num(e.target.value); root.querySelector('#ed-totals').innerHTML = totalsHtml(); }
+          if (e.target.id === 'ed-discval') { draft.discountValue = S.num(e.target.value); paintTotals(root); }
+          if (e.target.id === 'ed-taxval') { draft.taxValue = S.num(e.target.value); paintTotals(root); }
+        });
+
+        /* Loss prevention: the first keystroke makes this draft unsaved, and the
+           sidebar then asks once instead of throwing the work away. (Browser Back
+           cannot be intercepted without trapping history, but nothing is ever
+           destroyed — an unsaved draft is simply not in the list yet.) */
+        root.addEventListener('input', markDirty);
+        root.addEventListener('change', markDirty);
+        UI.setNavGuard((route) => {
+          if (!dirty) return false;
+          UI.confirmDialog('You have unsaved changes', 'This invoice has edits that are not saved. Leave and lose them?', () => { clearDirty(); UI.go('#/' + route); }, 'Discard changes');
+          return true;
         });
       },
       actions: {
-        cancel: () => { location.hash = '#/invoices'; },
+        cancel: () => {
+          if (!dirty) { location.hash = '#/invoices'; return; }
+          UI.confirmDialog('Discard this invoice?', 'Nothing you typed has been saved yet.', () => { clearDirty(); location.hash = '#/invoices'; }, 'Discard');
+        },
         'add-item': (d, el, e) => {
+          markDirty();
           draft.items.push({ desc: '', qty: 1, price: 0 });
           refresh(document.getElementById('view'));
           const inputs = document.querySelectorAll('#ed-items input[data-f="desc"]');
@@ -139,18 +176,62 @@
         },
         'rm-item': (d) => {
           if (draft.items.length === 1) { UI.toast('An invoice needs at least one line item', 'red'); return; }
-          draft.items.splice(+d.ix, 1);
+          const ix = +d.ix, removed = draft.items[ix];
+          markDirty();
+          draft.items.splice(ix, 1);
           refresh(document.getElementById('view'));
+          /* a delete you can take back is a delete you are not afraid of */
+          UI.toast('Line removed', '', 'trash', { undo: () => { draft.items.splice(Math.min(ix, draft.items.length), 0, removed); refresh(document.getElementById('view')); } });
         },
         save: () => doSave(false),
         'save-send': () => doSave(true)
       }
     };
 
+    /* Jakob: when a save fails, the field admits it in its own words. A toast
+       alone fades while you are still staring at the blank row, and it never
+       tells you *which* row. The toast stays as the summary channel. */
+    function formErr(root, msg) {
+      const wrap = root.querySelector('.editor-wrap') || root;
+      const el = document.createElement('div');
+      el.className = 'form-err'; el.setAttribute('role', 'alert');
+      el.innerHTML = icon('alert') + esc(msg);
+      wrap.insertBefore(el, wrap.firstChild);
+    }
+    function clearFieldErr(el) {
+      if (!el) return;
+      el.classList.remove('bad'); el.removeAttribute('aria-invalid');
+      if (el.__err && el.__err.parentNode) el.__err.remove();
+      el.__err = null;
+    }
+    function fieldErr(el, msg) {
+      clearFieldErr(el);
+      if (!el) return;
+      el.classList.add('bad'); el.setAttribute('aria-invalid', 'true');
+      const box = document.createElement('div');
+      box.className = 'field-err'; box.innerHTML = icon('alert') + esc(msg);
+      el.insertAdjacentElement('afterend', box);
+      el.__err = box;
+      el.addEventListener('input', () => clearFieldErr(el), { once: true });
+      try { el.focus({ preventScroll: true }); } catch (e) { try { el.focus(); } catch (e2) {} }
+    }
+
     function doSave(andSend) {
-      if (!draft.clientId) { UI.toast('Pick a client first', 'red'); return; }
+      const root = document.getElementById('view');
+      const stale = root.querySelector('.form-err'); if (stale) stale.remove();
+      if (!draft.clientId) {
+        UI.toast('Pick a client first', 'red');
+        formErr(root, 'Choose who this invoice is for — the client name prints on the document.');
+        fieldErr(root.querySelector('#ed-client'), 'Required');
+        return;
+      }
       const cleanItems = draft.items.filter((it) => (it.desc || '').trim() || S.num(it.price) > 0);
-      if (!cleanItems.length) { UI.toast('Add at least one line item', 'red'); return; }
+      if (!cleanItems.length) {
+        UI.toast('Add at least one line item', 'red');
+        formErr(root, 'Add at least one line item — a description alone is enough to save.');
+        fieldErr(root.querySelector('#ed-items input[data-f="desc"]'), 'What are you charging for?');
+        return;
+      }
       draft.items = cleanItems.map((it) => ({ desc: (it.desc || '').trim() || 'Item', qty: S.num(it.qty) || 1, price: S.num(it.price) }));
       let inv;
       if (existing) {
@@ -167,6 +248,7 @@
         S.log('created', 'Invoice ' + inv.number + ' created for ' + (S.getClient(inv.clientId) || {}).name);
       }
       S.save();
+      clearDirty();   // the work now exists on disk — stop guarding the exit
       if (andSend) {
         S.markSent(inv.id, 'Email');
         UI.closeModal();

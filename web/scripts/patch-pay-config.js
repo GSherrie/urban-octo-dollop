@@ -4,6 +4,12 @@
      SUPABASE_ANON_KEY=eyJ...
    Public values only — the Paystack SECRET key never touches the browser:
    it lives solely in the pay-verify edge function's secrets.
+
+   NOTE: this rewrites TRACKED files in place, consuming the __TOKENS__ that
+   tests/test-pay-config.js expects to find in source. For the default project
+   it is not needed at all — pay.js already carries the same publishable
+   defaults as js/store.js. Run it only when pointing SherPay at a DIFFERENT
+   Supabase project, and `git checkout web/js/pay.js` to hand the change back.
    Usage: node scripts/patch-pay-config.js */
 const fs = require('fs');
 const path = require('path');

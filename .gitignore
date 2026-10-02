@@ -3,4 +3,5 @@ node_modules/
 .vscode/chrome-profile/
 .DS_Store
 *.local
+.env.payments
 /dist/

@@ -3,6 +3,42 @@
   const S = window.Store, UI = window.UI;
   const icon = UI.icon, esc = S.esc;
 
+  /* ---------- setup loop card (Zeigarnik + Hick) ---------------------------
+     Every milestone is derived from data the user actually entered, so the card
+     cannot lie about progress. Only the next undone step is offered as a call to
+     action — finished steps collapse to a tick and later steps stay quiet, so
+     the card never turns into a five-button decision menu. */
+  function setupCard(p, blank) {
+    let nextSeen = false;
+    const rows = p.steps.map((s) => {
+      const cls = s.done ? 'ok' : (!nextSeen ? (nextSeen = true, 'next') : 'later');
+      return '<button class="loop-step ' + cls + '" data-action="setup-step" data-href="' + s.href + '">' +
+        '<span class="tick">' + icon('check') + '</span>' +
+        '<span style="flex:1;min-width:0"><b>' + esc(s.label) + '</b>' + (cls === 'next' ? '<div class="tiny muted">' + esc(s.hint) + '</div>' : '') + '</span>' +
+        '<span class="go">' + (s.done ? 'Done' : cls === 'next' ? 'Do next' : 'Later') + '</span>' +
+        '</button>';
+    }).join('');
+    return '<div class="card loop-card">' +
+      '<div class="loop-h"><h3>' + (blank ? 'Welcome to SherPay — your first payment is a few taps away' : 'Finish setting up SherPay') + '</h3>' +
+        '<div class="prog-line"><div class="prog"><i style="width:' + p.pct + '%"></i></div>' +
+        '<span class="of">' + p.done + ' of ' + p.total + '</span></div></div>' +
+      '<div class="loop-steps">' + rows + '</div>' +
+      '<div class="loop-foot">' +
+        (blank ? 'Nothing is pre-filled — this is your real workspace. ' : 'This card closes itself when every step is done. ') +
+        (blank ? '<button class="btn sm ghost" data-action="load-demo">' + icon('play') + 'Explore with sample data</button>' : '') +
+      '</div></div>';
+  }
+
+  /* ---------- unfinished work (Zeigarnik): pick up the draft you left ------ */
+  function resumeStrip(drafts) {
+    return '<div class="resume"><span class="rl">' + icon('edit') + 'Unfinished drafts</span>' +
+      drafts.map((i) => {
+        const c = S.getClient(i.clientId), t = S.computeTotals(i);
+        return '<button class="rb" data-action="edit-draft" data-id="' + i.id + '">' + esc(i.number) +
+          ' · ' + esc(c ? c.name : 'No client') + ' <span class="tnum tiny">' + S.fmtMoney(t.total, i.currency) + '</span>' + icon('chevron') + '</button>';
+      }).join('') + '</div>';
+  }
+
   /* ================= DASHBOARD ================= */
   UI.VIEWS.dashboard = function () {
     const k = S.kpis();
@@ -14,31 +50,29 @@
       .filter((i) => !['paid', 'draft'].includes(S.displayStatus(i)))
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     const act = S.db.activity.slice(0, 7);
-    const actIcon = { paid: ['wallet', 'var(--green-soft)', 'var(--green-dark)'], receipt: ['file', 'var(--green-soft)', 'var(--green-dark)'], viewed: ['eye', 'var(--violet-soft)', '#5B4BD1'], sent: ['send', 'var(--blue-soft)', '#0662C4'], reminder: ['bell', 'var(--amber-soft)', '#A56A00'], recurring: ['repeat', 'var(--blue-soft)', '#0662C4'], scan: ['scan', 'var(--blue-soft)', '#0662C4'] };
+    const actIcon = { paid: ['wallet', 'var(--green-soft)', 'var(--green-dark)'], receipt: ['file', 'var(--green-soft)', 'var(--green-dark)'], viewed: ['eye', 'var(--violet-soft)', 'var(--on-violet-soft)'], sent: ['send', 'var(--blue-soft)', 'var(--on-blue-soft)'], reminder: ['bell', 'var(--amber-soft)', 'var(--on-amber-soft)'], recurring: ['repeat', 'var(--blue-soft)', 'var(--on-blue-soft)'], scan: ['scan', 'var(--blue-soft)', 'var(--on-blue-soft)'] };
 
     const blankWorkspace = !S.db.clients.length && !S.db.invoices.length && !S.db.expenses.length;
+    /* Zeigarnik: an unfinished setup reads as an open loop, and an unfinished
+       draft reads as work you were in the middle of. Both are shown above the
+       fold and both disappear the moment they are closed. */
+    const prog = S.setupProgress();
+    const drafts = S.recentDrafts(3);
     return {
       title: 'Dashboard',
       sub: 'Business health at a glance — ' + new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }),
       topActions: '<button class="btn ghost" data-action="scan">' + icon('scan') + '<span class="hide-sm">Scan receipt</span></button><button class="btn primary" data-action="new-invoice">' + icon('plus') + 'New invoice</button>',
       html:
-        (blankWorkspace ?
-          '<div class="card mt2" style="border:2px dashed var(--line)"><div class="card-b" style="text-align:center;padding:34px 20px">' +
-            '<h2 style="font-size:20px;letter-spacing:-.3px;margin-bottom:6px">Welcome to SherPay</h2>' +
-            '<p class="small muted" style="max-width:430px;margin:0 auto 16px">This is your real workspace — nothing is pre-filled. Add your business details, then create your first invoice. Or explore the app with sample data first.</p>' +
-            '<div class="row" style="gap:10px;justify-content:center;flex-wrap:wrap">' +
-              '<button class="btn primary" data-action="go-clients">' + icon('clients') + 'Add a client</button>' +
-              '<button class="btn ghost" data-action="load-demo">' + icon('play') + 'Explore with sample data</button>' +
-            '</div>' +
-          '</div></div>' : '') +
+        (prog.complete ? '' : setupCard(prog, blankWorkspace)) +
+        (drafts.length ? resumeStrip(drafts) : '') +
         '<div class="grid kpis">' +
-          '<div class="card kpi accent-blue"><div class="lab">' + icon('wallet') + 'Outstanding</div><div class="val">' + S.fmtMoney(k.outstanding, cur) + '</div><div class="delta">' + outstanding.length + ' open invoice' + (outstanding.length === 1 ? '' : 's') + '</div></div>' +
+          '<div class="card kpi kpi-link accent-blue" data-action="open-outstanding" role="button" tabindex="0" aria-label="Outstanding — open all unpaid invoices"><div class="lab">' + icon('wallet') + 'Outstanding</div><div class="val">' + S.fmtMoney(k.outstanding, cur) + '</div><div class="delta">' + outstanding.length + ' open invoice' + (outstanding.length === 1 ? '' : 's') + '</div></div>' +
           '<div class="card kpi accent-green"><div class="lab">' + icon('check') + 'Collected this month</div><div class="val">' + S.fmtMoney(k.paidMonth, cur) + '</div><div class="delta">across all currencies (base ' + cur + ')</div></div>' +
-          '<div class="card kpi"><div class="lab">' + icon('expenses') + 'Expenses this month</div><div class="val">' + S.fmtMoney(k.expMonth, cur) + '</div><div class="delta">' + S.db.expenses.filter((e) => S.monthKey(e.date) === S.monthKey(S.todayISO())).length + ' receipts logged</div></div>' +
+          '<div class="card kpi kpi-link" data-action="open-expenses" role="button" tabindex="0" aria-label="Expenses this month — open expenses"><div class="lab">' + icon('expenses') + 'Expenses this month</div><div class="val">' + S.fmtMoney(k.expMonth, cur) + '</div><div class="delta">' + S.db.expenses.filter((e) => S.monthKey(e.date) === S.monthKey(S.todayISO())).length + ' receipts logged</div></div>' +
           '<div class="card kpi ' + (k.net >= 0 ? 'accent-green' : 'accent-red') + '"><div class="lab">' + icon('reports') + 'Net profit (month)</div><div class="val">' + S.fmtMoney(k.net, cur) + '</div><div class="delta">revenue − expenses</div></div>' +
         '</div>' +
         '<div class="grid two mt2">' +
-          '<div class="card"><div class="card-h"><h3>Cash flow — last 6 months</h3><div class="spacer"></div><span class="chip" style="border:none;background:var(--blue-soft);color:var(--navy-700)">■ Collected</span><span class="chip" style="border:none;background:#EDF1F6;color:var(--muted)">■ Spent</span></div><div class="card-b">' + UI.barChart(mb.months, mb.rev, mb.exp, cur) + '</div></div>' +
+          '<div class="card"><div class="card-h"><h3>Cash flow — last 6 months</h3><div class="spacer"></div><span class="chip" style="border:none;background:var(--blue-soft);color:var(--on-blue-soft)">■ Collected</span><span class="chip" style="border:none;background:var(--seg-bg);color:var(--muted)">■ Spent</span></div><div class="card-b">' + UI.barChart(mb.months, mb.rev, mb.exp, cur) + '</div></div>' +
           '<div class="card"><div class="card-h"><h3>Pipeline</h3></div><div class="card-b row wrap" style="gap:18px">' + UI.donut(counts) +
             '<div class="grid" style="gap:7px;flex:1">' + Object.entries(counts).map(([kk, v]) => '<div class="row small"><span class="badge ' + kk + '" style="min-width:86px;justify-content:center">' + S.STATUS_LABEL[kk] + '</span><b class="tnum">' + v + '</b></div>').join('') + '</div></div></div>' +
         '</div>' +
@@ -47,13 +81,13 @@
             (outstanding.length ? outstanding.slice(0, 6).map((i) => {
               const c = S.getClient(i.clientId), t = S.computeTotals(i), st = S.displayStatus(i);
               const dd = S.daysBetween(S.todayISO(), i.dueDate);
-              return '<div class="list-row"><div data-action="open-invoice" data-id="' + i.id + '" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer">' + UI.avatar(c ? c.name : '?') +
-                '<div style="flex:1;min-width:0"><b class="small">' + esc(i.number) + ' · ' + esc(c ? c.name : '') + '</b><div class="tiny muted">Due ' + S.fmtDate(i.dueDate) + ' · ' + (dd < 0 ? Math.abs(dd) + ' days overdue' : dd === 0 ? 'due today' : dd + ' days left') + '</div></div>' +
+              return '<div class="list-row' + (dd < 0 ? ' lr-overdue' : '') + '"><div data-action="open-invoice" data-id="' + i.id + '" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer">' + UI.avatar(c ? c.name : '?') +
+                '<div style="flex:1;min-width:0"><b class="small">' + esc(i.number) + ' · ' + esc(c ? c.name : '') + '</b><div class="tiny muted">Due ' + S.fmtDate(i.dueDate) + ' · ' + (dd < 0 ? '<b class="od">' + Math.abs(dd) + ' days overdue</b>' : dd === 0 ? 'due today' : dd + ' days left') + '</div></div>' +
                 '<div style="text-align:right"><div class="tnum small">' + S.fmtMoney(t.balance, i.currency) + '</div>' + UI.badge(st) + '</div></div></div>';
             }).join('') : '<div class="empty">' + icon('check') + '<b>Nothing outstanding</b>Every invoice is settled. Lovely.</div>') +
           '</div>' +
           '<div class="card"><div class="card-h"><h3>Activity</h3><div class="spacer"></div><span class="tiny muted">auto-logged</span></div>' +
-            (act.length ? act.map((a) => { const m = actIcon[a.type] || ['bell', 'var(--blue-soft)', '#0662C4']; return '<div class="act-item"><span class="ico" style="background:' + m[1] + ';color:' + m[2] + '">' + icon(m[0]) + '</span><div style="flex:1">' + esc(a.message) + '<div><time>' + S.fmtDateTime(a.ts) + '</time></div></div></div>'; }).join('') : '<div class="empty">No activity yet</div>') +
+            (act.length ? act.map((a) => { const m = actIcon[a.type] || ['bell', 'var(--blue-soft)', 'var(--on-blue-soft)']; return '<div class="act-item"><span class="ico" style="background:' + m[1] + ';color:' + m[2] + '">' + icon(m[0]) + '</span><div style="flex:1">' + esc(a.message) + '<div><time>' + S.fmtDateTime(a.ts) + '</time></div></div></div>'; }).join('') : '<div class="empty">No activity yet</div>') +
           '</div>' +
         '</div>',
       actions: {
@@ -61,14 +95,40 @@
         'go-clients': () => { location.hash = '#/clients'; },
         'load-demo': () => UI.confirmDialog('Explore with sample data?', 'Replaces this workspace with example clients, invoices and expenses so you can look around. You can start fresh again afterwards by deleting the sample items.', () => { S.resetDemo(); UI.toast('Sample data loaded', 'green', 'sync'); UI.render(); }, 'Load sample'),
         scan: () => UI.VIEWS.expenses.__scan(),
-        'open-invoice': (d) => { location.hash = '#/i/' + d.id; }
+        'open-invoice': (d) => { location.hash = '#/i/' + d.id; },
+        'setup-step': (d) => { if (d.href) UI.go(d.href); },
+        'edit-draft': (d) => { UI.go('#/invoices/' + d.id + '/edit'); },
+        'open-outstanding': () => { UI.go('#/invoices'); },
+        'open-expenses': () => { UI.go('#/expenses'); }
       }
     };
   };
 
   /* ================= INVOICES LIST ================= */
   UI.VIEWS.invoices = function () {
-    let q = '', status = 'all';
+    let q = '', status = 'all', tailOpen = false;
+    /* Hick: seven status chips all shouting is a menu, not a filter. The four
+       people actually reach for stay visible, the tail tucks behind "More" and
+       pops back out the moment one of them is the active filter. */
+    const CHIP_CORE = ['all', 'draft', 'sent', 'overdue'];
+    const CHIP_TAIL = ['viewed', 'partial', 'paid'];
+    function chipBtn(s, hidden) {
+      return '<button class="chip' + (status === s ? ' on' : '') + (hidden ? ' hidden' : '') + '" data-action="chip" data-s="' + s + '">' +
+        (s === 'all' ? 'All' : S.STATUS_LABEL[s]) + '</button>';
+    }
+    function chipsHtml() {
+      const expanded = tailOpen || CHIP_TAIL.indexOf(status) > -1;
+      let out = CHIP_CORE.map((s) => chipBtn(s)).join('');
+      out += CHIP_TAIL.map((s) => chipBtn(s, !expanded)).join('');
+      out += expanded
+        ? '<button class="chip more open" data-action="chip-more">Fewer</button>'
+        : '<button class="chip more" data-action="chip-more" aria-label="Show ' + CHIP_TAIL.length + ' more status filters">More <span class="n">+' + CHIP_TAIL.length + '</span></button>';
+      return out;
+    }
+    function refreshChips() {
+      const box = document.getElementById('inv-chips');
+      if (box) box.innerHTML = chipsHtml();
+    }
     function rows() {
       return S.db.invoices.filter((i) => {
         const c = S.getClient(i.clientId), t = S.computeTotals(i);
@@ -82,18 +142,21 @@
       return '<div class="scroll-x"><table class="table"><thead><tr><th>Invoice</th><th>Client</th><th class="hide-sm">Issued</th><th>Due</th><th>Status</th><th class="right">Total</th><th class="right hide-sm">Balance</th><th></th></tr></thead><tbody>' +
         list.map((i) => {
           const c = S.getClient(i.clientId), t = S.computeTotals(i), st = S.displayStatus(i);
-          return '<tr class="clickable" data-action="open-invoice" data-id="' + i.id + '">' +
+          const od = st === 'overdue';
+          /* Von Restorff: one red edge is the loudest thing in this table, and it
+             is spent entirely on the thing that is actually wrong. */
+          return '<tr class="clickable' + (od ? ' row-overdue' : '') + '" data-action="open-invoice" data-id="' + i.id + '">' +
             '<td><b>' + esc(i.number) + '</b>' + (i.recurring ? ' <span title="Recurring">' + icon('repeat') + '</span>' : '') + '</td>' +
             '<td><div class="row" style="gap:9px">' + UI.avatar(c ? c.name : '?') + '<span class="hide-sm">' + esc(c ? c.name : '—') + '</span></div></td>' +
             '<td class="hide-sm muted small">' + S.fmtDate(i.issueDate) + '</td>' +
-            '<td class="small">' + S.fmtDate(i.dueDate) + '</td>' +
+            '<td class="small' + (od ? ' od' : '') + '">' + S.fmtDate(i.dueDate) + '</td>' +
             '<td>' + UI.badge(st) + '</td>' +
             '<td class="right tnum small">' + S.fmtMoney(t.total, i.currency) + '</td>' +
             '<td class="right tnum small hide-sm">' + (t.balance > 0 ? S.fmtMoney(t.balance, i.currency) : '—') + '</td>' +
             '<td class="right" style="white-space:nowrap">' +
-              (st === 'draft' ? '<button class="btn sm ghost" data-action="send" data-id="' + i.id + '">' + icon('send') + 'Send</button>' : '') +
-              (st !== 'paid' && st !== 'draft' ? '<button class="btn sm green" data-action="pay" data-id="' + i.id + '">' + icon('wallet') + '<span class="hide-sm">Payment</span></button>' : '') +
-              '<button class="btn sm icon ghost" title="Edit" data-action="edit" data-id="' + i.id + '">' + icon('edit') + '</button>' +
+              (st === 'draft' ? '<button class="btn sm ghost" data-action="send" data-id="' + i.id + '" aria-label="Send ' + esc(i.number) + '">' + icon('send') + 'Send</button>' : '') +
+              (st !== 'paid' && st !== 'draft' ? '<button class="btn sm green" data-action="pay" data-id="' + i.id + '" aria-label="Record a payment on ' + esc(i.number) + '">' + icon('wallet') + '<span class="hide-sm">Payment</span></button>' : '') +
+              '<button class="btn sm icon ghost" title="Edit" aria-label="Edit ' + esc(i.number) + '" data-action="edit" data-id="' + i.id + '">' + icon('edit') + '</button>' +
             '</td></tr>';
         }).join('') + '</tbody></table></div>';
     }
@@ -103,8 +166,8 @@
       topActions: '<button class="btn primary" data-action="new-invoice">' + icon('plus') + 'New invoice</button>',
       html:
         '<div class="card"><div class="card-h" style="gap:9px;flex-wrap:wrap">' +
-          '<div style="position:relative;flex:1;min-width:170px;max-width:330px"><input id="inv-q" class="input" style="padding-left:34px" placeholder="Search number, client, amount…"></div>' +
-          '<div class="row wrap" id="inv-chips" style="gap:6px">' + ['all', 'draft', 'sent', 'viewed', 'partial', 'paid', 'overdue'].map((s) => '<button class="chip' + (s === 'all' ? ' on' : '') + '" data-action="chip" data-s="' + s + '">' + (s === 'all' ? 'All' : S.STATUS_LABEL[s]) + '</button>').join('') + '</div>' +
+          '<div style="position:relative;flex:1;min-width:170px;max-width:330px"><input id="inv-q" class="input" style="padding-left:34px" placeholder="Search number, client, amount…" aria-label="Search invoices" inputmode="search" autocomplete="off"></div>' +
+          '<div class="row wrap" id="inv-chips" style="gap:6px">' + chipsHtml() + '</div>' +
           '<div class="spacer"></div><button class="btn ghost sm" data-action="csv">' + icon('download') + 'CSV</button>' +
         '</div><div id="inv-table">' + tableHtml() + '</div></div>',
       mount: (root) => {
@@ -113,7 +176,8 @@
       },
       actions: {
         'new-invoice': () => { location.hash = '#/invoices/new'; },
-        chip: (d, el, root) => { status = d.s; document.querySelectorAll('#inv-chips .chip').forEach((c) => c.classList.toggle('on', c.dataset.s === d.s)); document.getElementById('inv-table').innerHTML = tableHtml(); },
+        chip: (d) => { status = d.s; refreshChips(); document.getElementById('inv-table').innerHTML = tableHtml(); },
+        'chip-more': () => { tailOpen = !tailOpen; refreshChips(); },
         'open-invoice': (d) => { location.hash = '#/i/' + d.id; },
         edit: (d) => { location.hash = '#/invoices/' + d.id + '/edit'; },
         send: (d) => sendModal(d.id),

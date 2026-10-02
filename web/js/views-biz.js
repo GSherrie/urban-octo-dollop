@@ -21,7 +21,7 @@
     return {
       title: 'Reports',
       sub: 'Profit & loss, tax summary and accountant-ready exports',
-      topActions: '<button class="btn ghost" data-action="csv-pl">' + icon('download') + 'P&L CSV</button><button class="btn ghost" data-action="csv-tax">' + icon('download') + 'Tax CSV</button><button class="btn primary" data-action="print">' + icon('print') + 'Print / PDF</button>',
+      topActions: '<button class="btn ghost" data-action="csv-pl">' + icon('file') + 'P&L CSV</button><button class="btn ghost" data-action="csv-tax">' + icon('download') + 'Tax CSV</button><button class="btn primary" data-action="print">' + icon('print') + 'Print / PDF</button>',
       html:
         '<div class="grid kpis">' +
           '<div class="card kpi accent-green"><div class="lab">' + icon('wallet') + 'Revenue (6 mo)</div><div class="val">' + S.fmtMoney(totRev, cur()) + '</div><div class="delta">payments collected</div></div>' +
@@ -77,7 +77,7 @@
             '<div class="card"><div class="card-h"><h3>Business profile</h3></div><div class="card-b fgrid c2">' +
               '<div style="grid-column:1/-1" class="row"><img id="set-logo" src="' + (b.logoDataUrl || 'assets/logo.png') + '" alt="Your business logo" style="width:56px;height:56px;border-radius:14px"><div><label class="f">Logo on invoices</label><label class="btn sm ghost" style="cursor:pointer">' + icon('download') + ' Upload<input id="set-logofile" type="file" accept="image/*" hidden></label></div></div>' +
               '<div style="grid-column:1/-1"><label class="f">Business name</label><input id="set-name" class="input" value="' + esc(b.name) + '"></div>' +
-              '<div style="grid-column:1/-1" class="hint">These details are printed on every invoice you send — set your real business name, email, phone and address here. (This build ships with sample data; replace it with your own.)</div>' +
+              '<div style="grid-column:1/-1" class="hint">These details are printed on every invoice you send — set your real business name, email, phone and address. Anything that isn\'t yours, replace here.</div>' +
               '<div><label class="f">Email</label><input id="set-email" class="input" value="' + esc(b.email) + '"></div>' +
               '<div><label class="f">Phone</label><input id="set-phone" class="input" value="' + esc(b.phone) + '"></div>' +
               '<div style="grid-column:1/-1"><label class="f">Address (printed on invoices)</label><textarea id="set-addr" class="input">' + esc(b.address) + '</textarea></div>' +
@@ -111,7 +111,7 @@
               '<div class="hint">Paste your Paystack <b>public</b> key here to give clients a hosted checkout (cards, bank transfer &amp; mobile money). The <b>secret</b> key never goes in the app — it lives in the pay-verify edge function. Payments verify server-side and mark invoices paid automatically.</div>' +
             '</div></div>' +
             '<div class="card"><div class="card-h"><h3>Cloud sync</h3><div class="spacer"></div><span class="badge ' + ((st.cloud && st.cloud.enabled) ? 'paid' : 'draft') + '">' + ((st.cloud && st.cloud.enabled) ? 'On' : 'Off') + '</span></div><div class="card-b">' +
-              '<div class="row small mb" style="gap:10px"><div style="flex:1"><b class="small">Sync with SherPay cloud</b><div class="tiny muted">' + (S.cloud.enabled() ? ('Connected — last sync ' + esc(S.cloud.lastSync() ? new Date(S.cloud.lastSync()).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never') + (S.cloud.status() === 'connecting' ? ' · connecting…' : '') + (S.cloud.lastError() ? ' · ' + esc(S.cloud.lastError()) : '')) : 'Your real account lives in the cloud — sign in on any device.') + '</div></div>' +
+              '<div class="row small mb" style="gap:10px"><div style="flex:1"><b class="small">Sync with SherPay cloud</b><div class="tiny muted">' + (S.cloud.enabled() ? ((S.cloud.status() === 'expired' ? 'Session expired — last sync ' : 'Connected — last sync ') + esc(S.cloud.lastSync() ? new Date(S.cloud.lastSync()).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never') + (S.cloud.status() === 'connecting' ? ' · connecting…' : '') + (S.cloud.lastError() ? ' · ' + esc(S.cloud.lastError()) : '')) : 'Your real account lives in the cloud — sign in on any device.') + '</div></div>' +
                 '<label class="switch"><input type="checkbox" id="set-cloud-on" role="switch" aria-label="Enable cloud sync"' + ((st.cloud && st.cloud.enabled) ? ' checked' : '') + '><span class="track"></span></label></div>' +
               '<details class="mt"><summary class="tiny muted" style="cursor:pointer">Advanced: use a different Supabase project</summary>' +
               '<div class="fgrid c2 mt">' +
@@ -128,9 +128,9 @@
             '</div></div>' +
             '<div class="card"><div class="card-h"><h3>Data</h3></div><div class="card-b row wrap" style="gap:8px">' +
               '<button class="btn ghost" data-action="backup">' + icon('download') + 'Backup JSON</button>' +
-              '<label class="btn ghost" style="cursor:pointer">' + icon('sync') + ' Restore backup<input id="set-restore" type="file" accept="application/json" hidden></label>' +
+              '<label class="btn ghost" style="cursor:pointer">' + icon('upload') + ' Restore backup<input id="set-restore" type="file" accept="application/json" hidden></label>' +
               '<button class="btn danger" data-action="reset">' + icon('trash') + 'Load sample data</button>' +
-              '<button class="btn ghost" data-action="signout">' + icon('lock') + 'Sign out</button>' +
+              '<button class="btn ghost" data-action="signout">' + icon('logout') + 'Sign out</button>' +
               '<div class="hint" style="width:100%">Everything lives in your browser (offline-first). Backup exports invoices, clients, expenses, time & settings.</div>' +
             '</div></div>' +
           '</div>' +
@@ -210,7 +210,13 @@
           if (!st.cloud.enabled) { UI.toast('Enable cloud sync first', 'amber', 'cloud'); return; }
           if (!S.cloud) return;
           UI.toast('Syncing…', 'blue', 'sync');
-          try { const r = await S.cloud.sync(); UI.toast(r.action === 'pushed' ? 'Workspace uploaded' : r.action === 'pulled' ? 'Latest version downloaded' : 'Already up to date', 'green', 'sync'); UI.render(); }
+          try {
+            const r = await S.cloud.sync();
+            /* "ok: false" is not "up to date" — saying so is the whole point of syncing */
+            if (r && r.ok === false) { UI.alertError('Cloud sync did not run', (r.error || 'The cloud account could not be reached') + '. Your work is saved on this device; nothing was uploaded.'); }
+            else { UI.toast(r.action === 'pushed' ? 'Workspace uploaded' : r.action === 'pulled' ? 'Latest version downloaded' : 'Already up to date', 'green', 'sync'); }
+            UI.render();
+          }
           catch (e) { UI.toast('Sync failed: ' + (e.message || e), 'red', 'alert'); }
         },
         'run-now': () => {

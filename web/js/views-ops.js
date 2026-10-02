@@ -21,7 +21,7 @@
             '<div class="tiny muted mt" style="white-space:pre-line">' + esc(c.address || '') + '</div>' +
             '<div class="tiny mt">' + icon('mail') + ' <a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a></div>' +
             '<div class="tiny">' + icon('msg') + ' ' + esc(c.phone || '—') + ' · terms ' + (c.terms || 30) + ' days</div>' +
-            '<div class="row mt" style="gap:8px"><span class="chip">' + invs.length + ' invoices</span><span class="chip">billed ' + S.fmtMoney(billed, S.db.settings.currency) + '</span>' + (outstanding > 0 ? '<span class="chip" style="background:var(--amber-soft);border-color:transparent;color:#A56A00">due ' + S.fmtMoney(outstanding, S.db.settings.currency) + '</span>' : '') + '</div>' +
+            '<div class="row mt" style="gap:8px"><span class="chip">' + invs.length + ' invoices</span><span class="chip">billed ' + S.fmtMoney(billed, S.db.settings.currency) + '</span>' + (outstanding > 0 ? '<span class="chip" style="background:var(--amber-soft);border-color:transparent;color:var(--on-amber-soft)">due ' + S.fmtMoney(outstanding, S.db.settings.currency) + '</span>' : '') + '</div>' +
             '<button class="btn sm primary mt" style="width:100%" data-action="invoice" data-id="' + c.id + '">' + icon('invoice') + 'New invoice for ' + esc(c.name.split(' ')[0]) + '</button>' +
             '</div></div>';
         }).join('') + '</div>',
@@ -195,7 +195,7 @@
         '<div><div class="scan-frame" id="scan-frame"><div class="scan-corners"><i></i><i></i><i></i><i></i></div><div id="scan-msg" style="color:#BFE0FF;font-size:13px;font-weight:600;text-align:center;padding:0 20px">Point your camera at a receipt,<br>or upload a photo / PDF</div></div>' +
         '<div class="row mt" style="gap:8px;flex-wrap:wrap">' +
           '<label class="btn primary" style="flex:1;cursor:pointer">' + icon('scan') + ' Take photo<input id="scan-cam" type="file" accept="image/*" capture="environment" hidden></label>' +
-          (liveSupported ? '<button class="btn ghost" id="scan-live" style="flex:1">' + icon('play') + ' Restart camera</button>' : '') +
+          (liveSupported ? '<button class="btn ghost" id="scan-live" style="flex:1">' + icon('video') + ' Restart camera</button>' : '') +
           '<label class="btn ghost" style="flex:1;cursor:pointer">' + icon('file') + ' Upload<input id="scan-file" type="file" accept="image/*,application/pdf" hidden></label>' +
           '<button class="btn ghost" id="scan-demo">' + icon('play') + '<span class="hide-sm"> Demo</span></button>' +
         '</div>' +
