@@ -1,0 +1,8 @@
+# Keep the build/ops scripts and local secrets out of the deployed app.
+# (Without this, /scripts/ is publicly readable on the deployed host — patch
+# scripts and their env handling included.)
+scripts/
+tests/
+README.md
+.env*
+.vercel/
