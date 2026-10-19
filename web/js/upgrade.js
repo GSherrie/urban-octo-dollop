@@ -28,7 +28,7 @@
   /* Prices mirrored from supabase/functions/momo-upgrade/core.mjs — the suite
      fails if the two drift, and the server's price is charged regardless of
      what this one claims. */
-  var PLANS = { pro: { price: 49, months: 12, currency: 'GHS', title: 'SherPay Pro' } };
+  var PLANS = { pro: { price: 1, months: 12, currency: 'GHS', title: 'SherPay Pro' } };
   var WALLETS = [
     { id: 'mtn', label: 'MTN MoMo', hint: '024 025 055', prefix: ['024', '025', '053', '054', '055', '059'] },
     { id: 'telecel', label: 'Telecel Cash', hint: '020 050', prefix: ['020', '050'] },
@@ -130,6 +130,7 @@
         ref: order.ref, status: order.status || 'pending', plan: order.plan || 'pro',
         billing: order.billing || 'annual', amount: order.amount || 0, currency: order.currency || 'GHS',
         provider: order.provider || '', account: order.account || '', checkout_url: order.checkout_url || '',
+        email: order.email || '',
         at: Date.now()
       });
       localStorage.setItem(RESUME_KEY, JSON.stringify(keep.slice(0, 8)));

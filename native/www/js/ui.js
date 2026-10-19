@@ -100,12 +100,13 @@ window.UI = (function () {
     { route: 'invoices', label: 'Invoices', icon: 'invoice', group: 'Daily' },
     { route: 'clients', label: 'Clients', icon: 'clients', group: 'Daily' },
     { route: 'expenses', label: 'Expenses', icon: 'expenses', group: 'Daily' },
+    { route: 'inventory', label: 'Inventory', icon: 'box', group: 'Daily' },
     { route: 'time', label: 'Time Tracking', icon: 'time', group: 'Daily' },
     { route: 'reports', label: 'Reports', icon: 'reports', group: 'Workspace' },
     { route: 'settings', label: 'Settings', icon: 'settings', group: 'Workspace' },
     { route: 'account', label: 'Account', icon: 'user', group: 'Workspace' }
   ];
-  const MOBILE_NAV = ['dashboard', 'invoices', 'clients', 'expenses', 'more'];
+  const MOBILE_NAV = ['dashboard', 'invoices', 'clients', 'expenses', 'inventory', 'more'];
 
   /* open-loop counters live on the nav so unfinished work is visible from
      anywhere; overdue flips the pill to the single "something is wrong" red */
@@ -163,6 +164,21 @@ window.UI = (function () {
     if (S.cloud && S.cloud.onSessionExpired) {
       S.cloud.onSessionExpired(() => alertError('Cloud sync stopped',
         'Your SherPay cloud session expired, so this workspace is no longer syncing to your account. Nothing you typed is lost — it is saved on this device. Open Account and sign in again to resume syncing.'));
+    }
+    /* Reconnect cloud sync now, not on the next login: it used to initialise
+       lazily, so after a reload sync silently never resumed — and the status
+       chip must reflect reality from the very first frame. */
+    if (S.cloud && S.cloud.enabled && S.cloud.enabled() && S.cloud.init) {
+      Promise.resolve(S.cloud.init()).catch(function () {});
+    }
+    /* Live chip updates: a background push that finishes while you are typing
+       flips the label without a re-render. If a cloud session restores while
+       the auth screen is up, drop straight into the shell. */
+    if (S.cloud && S.cloud.onSync) {
+      S.cloud.onSync(function () {
+        updateSyncChip();
+        if (!authed() && S.Auth.current()) render();
+      });
     }
     render();
   }
@@ -284,6 +300,70 @@ window.UI = (function () {
   function setOnline() {
     const el = document.getElementById('online-ind');
     if (el) { el.classList.toggle('off', !navigator.onLine); el.querySelector('span').textContent = navigator.onLine ? 'You are online — saved on this device' : 'Offline — saved on this device'; }
+    updateSyncChip();   // the sync chip also depends on connectivity
+  }
+
+  /* ---------------- cloud sync chip (topbar) ------------------------------
+     One glance should answer "is my work actually reaching the cloud?".
+     States: sync off / offline / connecting / syncing / session expired /
+     sync failed / synced N ago / not linked / not synced yet — and clicking
+     it runs a sync (one shared handler with every Settings "Sync now" row). */
+  function relTime(ts) {
+    const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 45) return 'just now';
+    if (s < 3600) return Math.max(1, Math.round(s / 60)) + 'm ago';
+    if (s < 86400) return Math.round(s / 3600) + 'h ago';
+    return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+  function syncChipState() {
+    const c = S.cloud || {};
+    if (!c.enabled || !c.enabled()) return { cls: 'off', icon: 'cloudOff', label: 'Sync off', tip: 'Cloud sync is off — enable it in Settings ▸ Cloud sync' };
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return { cls: 'off', icon: 'cloudOff', label: 'Offline', tip: 'Offline — changes sync automatically when you are back online.' };
+    if (c.syncing && c.syncing()) return { cls: 'busy', icon: 'sync', label: 'Syncing…', tip: 'Sending your latest changes to the cloud…' };
+    if (c.status && c.status() === 'connecting') return { cls: 'busy', icon: 'sync', label: 'Connecting…', tip: 'Connecting to your cloud account…' };
+    if (c.status && c.status() === 'expired') return { cls: 'err', icon: 'alert', label: 'Session expired', tip: (c.lastError && c.lastError()) || 'Your cloud session expired — sign in again to resume syncing.' };
+    if (c.status && c.status() === 'error') return { cls: 'err', icon: 'alert', label: 'Sync failed', tip: ((c.lastError && c.lastError()) || 'The cloud account could not be reached') + ' — click to try again.' };
+    const at = c.lastSync && c.lastSync();
+    const linked = !!(c.user && c.user());
+    if (at) return { cls: 'ok', icon: 'cloud', label: 'Synced ' + relTime(at), tip: 'Workspace backed up ' + new Date(at).toLocaleString('en-GB') + '. ' + (linked ? 'Click to sync now.' : 'No cloud account is signed in on this device — sign in to keep syncing.') };
+    if (!linked) return { cls: 'idle', icon: 'cloudOff', label: 'Not linked', tip: 'No cloud account is signed in on this device — sign in to sync this workspace.' };
+    return { cls: 'idle', icon: 'cloud', label: 'Not synced yet', tip: 'Cloud sync is on but nothing has been uploaded yet. Click to sync now.' };
+  }
+  function syncChip() {
+    const st = syncChipState();
+    return '<button class="sync-chip ' + st.cls + '" id="sync-chip" data-action="cloud-sync" title="' + S.esc(st.tip) + '" aria-label="Cloud sync: ' + S.esc(st.label) + '">' + icon(st.icon) + '<span class="sc-label hide-sm">' + S.esc(st.label) + '</span></button>';
+  }
+  function updateSyncChip() {
+    const el = document.getElementById('sync-chip');
+    if (!el) return;                      // auth screen — no topbar
+    const st = syncChipState();
+    el.className = 'sync-chip ' + st.cls;
+    el.title = st.tip;
+    el.setAttribute('aria-label', 'Cloud sync: ' + st.label);
+    el.innerHTML = icon(st.icon) + '<span class="sc-label hide-sm">' + S.esc(st.label) + '</span>';
+  }
+  /* The one sync handler: chip click and every "Sync now" row route here,
+     so they can never drift apart. Like the old per-view copies it never
+     reports a failed run as success — and it heals a first click after a
+     load by initialising the client, while telling an unlinked device
+     plainly what to do instead of showing a cryptic "Not signed in". */
+  async function cloudSyncNow() {
+    if (!S.cloud.enabled()) { toast('Cloud sync is off — enable it in Settings ▸ Cloud sync', 'amber', 'cloud'); return; }
+    try { if (!(S.cloud.user && S.cloud.user())) await S.cloud.init(); } catch (e) { /* reported below via status */ }
+    const stt = S.cloud.status ? S.cloud.status() : '';
+    if (stt === 'error' || stt === 'expired') { toast((S.cloud.lastError && S.cloud.lastError()) || 'Cloud sync could not connect', 'red', 'alert'); return; }
+    if (!(S.cloud.user && S.cloud.user())) { toast('No cloud account is signed in on this device — sign in to start syncing.', 'amber', 'cloud'); return; }
+    toast('Syncing…', 'blue', 'sync');
+    try {
+      const r = await S.cloud.sync();
+      /* "ok: false" is never "up to date" — saying so is the whole point */
+      if (r && r.ok === false) {
+        if (!r.auth) alertError('Cloud sync did not run', (r.error || 'The cloud account could not be reached') + '. Your work is saved on this device; nothing was uploaded.');
+      } else {
+        toast(r.action === 'pushed' ? 'Workspace uploaded' : r.action === 'pulled' ? (r.conflict ? 'Updated — an older copy was archived' : 'Latest version downloaded') : 'Already up to date', r.conflict ? 'amber' : 'green', 'sync');
+      }
+      render(true);
+    } catch (e) { toast('Sync failed: ' + (e.message || e), 'red', 'alert'); }
   }
 
   function render(force) {
@@ -318,11 +398,12 @@ window.UI = (function () {
             '<div class="uc-meta"><b>' + S.esc(S.Auth.current().name) + '</b><span>' + S.esc(S.Auth.current().email) + '</span></div>' +
             '<button class="uc-out" data-action="signout" title="Sign out" aria-label="Sign out">' + icon('logout') + '</button>' +
           '</div>' +
-          '<div class="pro-card" style="margin-top:10px"><b>' + icon('star') + ' SherPay Pro' + (S.upgrades.isPro() ? ' <span class="badge paid">Active</span>' : '') + '</b><p>Mileage GPS tracker, inventory, client portal & QuickBooks/Xero sync.</p><button data-action="pro">' + (S.upgrades.isPro() ? 'View Pro' : 'Pay ' + S.fmtMoney(S.upgrades.price('pro').amount, 'GHS') + ' \u00b7 MoMo') + '</button></div>' +
+          '<div class="pro-card" style="margin-top:10px"><b>' + icon('star') + ' SherPay Pro' + (S.upgrades.isPro() ? ' <span class="badge paid">Active</span>' : '') + '</b><p>Mileage GPS tracker, inventory, client portal & QuickBooks/Xero sync.</p><button data-action="pro">' + (S.upgrades.isPro() ? 'View Pro' : 'Pay ' + S.fmtMoney(S.upgrades.price('pro').amount, 'GHS') + ' \u00b7 MoMo') + '</button></div>' + (S.upgrades.isPro() ? '<button class="btn ghost" data-action="open-inv">Open inventory</button>' : '') + '</div>' +
         '</div>' +
       '</aside>' +
       '<div class="main">' +
         '<header class="topbar"><div><h1 id="tb-title"></h1><div class="sub" id="tb-sub"></div></div><div class="spacer"></div><div class="row" id="tb-actions"></div>' +
+          syncChip() +
           accountChip() +
         '</header>' +
         '<div id="view"></div>' +
@@ -439,6 +520,9 @@ window.UI = (function () {
     if (name === 'acct-settings') { closeModal(); go('#/settings'); return; }
     if (name === 'acct-pro') { proModal(); return; }
     if (name === 'signout') { signOut(); return; }
+    /* One sync handler for the whole shell — the topbar status chip and every
+       Settings/Account "Sync now" row route through it. */
+    if (name === 'cloud-sync') { cloudSyncNow(); return; }
     if (name === 'close-modal') { closeModal(); return; }
     const fn = currentActions[name];
     if (fn) { e.preventDefault(); fn(el.dataset, el, e); }
@@ -466,7 +550,7 @@ window.UI = (function () {
   function proModal() {
     const plan = S.upgrades.state();
     const price = S.upgrades.price('pro');
-    const open = S.upgrades.resumeRefs().filter((r) => r.status !== 'paid');
+    const open = S.upgrades.resumeRefs().filter((r) => r.status !== 'paid' && S.upgrades.refIsMine(r));
     const cost = S.fmtMoney(price.amount, price.currency);
     const rows = open.map((r) =>
       '<div class="card card-b mt" data-ref="' + S.esc(r.ref) + '">' +

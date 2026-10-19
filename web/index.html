@@ -19,7 +19,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="stylesheet" href="styles.css?v=20">
+<link rel="stylesheet" href="styles.css?v=22">
 <script>
   /* Paint the saved theme (light | dark | system) before first paint, so a dark-mode
      launch never flashes white behind the splash. Same preference the Account ▸
@@ -27,9 +27,18 @@
      start() and keeps it in step with the OS while "system" is selected. */
   (function () {
     try {
-      var raw = localStorage.getItem('sherpay_db_v1');
-      var t = raw ? (((JSON.parse(raw).settings || {}).preferences || {}).theme || 'system') : 'system';
-      var dark = t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      // per-user theme: never read the legacy shared workspace here — a
+      // signed-out boot must not resurrect another account's data. Scan only
+      // sherpay_db_v1:<userId> caches for a dark preference.
+      var dark = false;
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('sherpay_db_v1:') !== 0) continue;
+        try {
+          var t = (((JSON.parse(localStorage.getItem(k)).settings || {}).preferences || {}).theme || 'system');
+          if (t === 'dark' || (t !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) { dark = true; break; }
+        } catch (e) {}
+      }
       if (dark) {
         document.documentElement.setAttribute('data-theme', 'dark');
         document.addEventListener('DOMContentLoaded', function () {
@@ -42,51 +51,37 @@
 </script>
 </head>
 <body>
-<div id="splash" aria-hidden="true">
-  <div class="splash-inner">
-    <div class="splash-logo-wrap">
-      <div class="splash-ring"></div>
-      <img src="assets/logo.png" alt="SherPay logo" class="splash-logo">
-    </div>
-    <div class="splash-word">Sher<span>Pay</span></div>
-    <div class="splash-tag">Invoices · Receipts · Payments</div>
-    <div class="splash-bar"><span></span></div>
-  </div>
-</div>
 <div id="app" class="shell-loading"></div>
 <div id="modal-root"></div>
 <div id="toast-root" role="status" aria-live="polite"></div>
-<script src="js/store.js?v=20"></script>
-<script src="js/ui.js?v=20"></script>
-<script src="js/views-auth.js?v=20"></script>
-<script src="js/views-main.js?v=20"></script>
-<script src="js/views-editor.js?v=20"></script>
-<script src="js/views-ops.js?v=20"></script>
-<script src="js/views-biz.js?v=20"></script>
-<script src="js/views-account.js?v=20"></script>
+<script src="js/store.js?v=22"></script>
+<script src="js/ui.js?v=22"></script>
+<script src="js/views-auth.js?v=22"></script>
+<script src="js/views-main.js?v=22"></script>
+  <script src="js/views-inventory.js?v=22"></script>
+<script src="js/views-editor.js?v=22"></script>
+<script src="js/views-ops.js?v=22"></script>
+<script src="js/views-biz.js?v=22"></script>
+<script src="js/views-account.js?v=22"></script>
 <script>
   window.addEventListener('DOMContentLoaded', function () {
     Store.boot();
-    /* cloud init restores any existing session before the shell renders */
-    Promise.resolve(Store.cloud && Store.cloud.enabled() ? Store.cloud.init() : null).catch(function () {}).then(function () {
-      UI.start();
-      UI.dismissSplash();
-      /* pick up any payments that completed via hosted checkout since last open */
-      Store.syncPayments().then(function (n) { if (n) UI.toast(n + ' payment' + (n === 1 ? '' : 's') + ' received online', 'green', 'wallet'); }).catch(function () {});
-      /* …and any SherPay Pro upgrade paid by mobile money whose reference has
-         cleared since this device last looked (the checkout happens on
-         upgrade.html, which leaves the reference behind for us to finish) */
-      Store.upgrades.sync().then(function (on) {
-        if (!on) return;
-        UI.render(true);
-        UI.toast('SherPay Pro is active on this account', 'green', 'star');
-      }).catch(function () {});
-      /* keep the workspace current: re-sync whenever the app returns to the foreground */
-      document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible' && Store.cloud && Store.cloud.enabled()) {
-          Store.cloud.sync().then(function (r) { if (r && r.action === 'pulled') UI.render(true); }).catch(function () {});
-        }
-      });
+    UI.start();
+    UI.dismissSplash();
+    /* pick up any payments that completed via hosted checkout since last open */
+    Store.syncPayments().then(function (n) { if (n) UI.toast(n + ' payment' + (n === 1 ? '' : 's') + ' received online', 'green', 'wallet'); }).catch(function () {});
+    /* and any SherPay Pro upgrade paid by mobile money whose reference has
+       cleared since this device last looked */
+    Store.upgrades.sync().then(function (on) {
+      if (!on) return;
+      UI.render(true);
+      UI.toast('SherPay Pro is active on this account', 'green', 'star');
+    }).catch(function () {});
+    /* keep the workspace current: re-sync whenever the app returns to the foreground */
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && Store.cloud && Store.cloud.enabled()) {
+        Store.cloud.sync().then(function (r) { if (r && r.action === 'pulled') UI.render(true); }).catch(function () {});
+      }
     });
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
@@ -94,7 +89,7 @@
            always checks for the newest build instead of trusting its HTTP cache. A new worker
            skipWaiting()s on install; the one-time controllerchange reload then swaps the running
            page onto fresh assets, so an installed app never keeps serving an old build. */
-        navigator.serviceWorker.register('sw.js?v=20', { updateViaCache: 'none' }).then(function (reg) {
+        navigator.serviceWorker.register('sw.js?v=22', { updateViaCache: 'none' }).then(function (reg) {
           reg.update().catch(function () {});
           document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') reg.update().catch(function () {});

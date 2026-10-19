@@ -62,18 +62,18 @@ function stubFetch(sandbox) {
   check('a fresh account is not on Pro', Store.upgrades.isPro() === false && Store.upgrades.title() === 'SherPay Free');
   check('and has nothing waiting to be checked', Store.upgrades.resumeRefs().length === 0);
   check('the price the shell quotes is the price the server charges',
-    Store.upgrades.price('pro').amount === 49 && Store.upgrades.price('pro').months === 12 && Store.upgrades.price('pro').currency === 'GHS');
+    Store.upgrades.price('pro').amount === 1 && Store.upgrades.price('pro').months === 12 && Store.upgrades.price('pro').currency === 'GHS');
   check('the checkout link hands over the account email so nobody retypes it',
     Store.upgrades.link().indexOf('upgrade.html?plan=pro&email=ama%40studio.gh') > -1);
 
   console.log('-- remembering what this device started');
-  Store.upgrades.rememberRef({ ref: REF, status: 'awaiting_approval', amount: 49, currency: 'GHS', provider: 'mtn', checkout_url: 'https://paystack.example/x' });
+  Store.upgrades.rememberRef({ ref: REF, status: 'pending', amount: 1, currency: 'GHS', provider: 'mtn', checkout_url: 'https://paystack.example/x' });
   check('a reference is kept where the next launch can find it', JSON.parse(store.getItem(KEY))[0].ref === REF);
-  Store.upgrades.rememberRef({ ref: REF, status: 'pending', amount: 49 });
+  Store.upgrades.rememberRef({ ref: REF, status: 'pending', amount: 1 });
   check('the same reference is never kept twice', JSON.parse(store.getItem(KEY)).filter((r) => r.ref === REF).length === 1);
 
   console.log('-- asking the server, on open, about an unfinished payment');
-  nextBody = { ok: true, order: { ref: REF, status: 'awaiting_approval', amount: 49, provider: 'mtn' } };
+  nextBody = { ok: true, order: { ref: REF, status: 'pending', amount: 1, provider: 'mtn' } };
   calls = [];
   let changed = await Store.upgrades.sync();
   check('the checkout function is asked, by reference', calls.length === 1 &&
@@ -83,7 +83,7 @@ function stubFetch(sandbox) {
   check('a still-waiting payment grants nothing', changed === false && Store.upgrades.isPro() === false);
   check('and stays remembered for the next open', JSON.parse(store.getItem(KEY))[0].ref === REF);
 
-  nextBody = { ok: true, order: { ref: REF, status: 'paid', amount: 49, amount_paid: 49, provider: 'mtn', paid_at: '2026-10-06T10:02:00Z' } };
+  nextBody = { ok: true, order: { ref: REF, status: 'paid', amount: 1, amount_paid: 1, provider: 'mtn', paid_at: '2026-10-06T10:02:00Z' } };
   changed = await Store.upgrades.sync();
   check('a confirmed payment unlocks Pro on the next open', changed === true && Store.upgrades.isPro() === true);
   check('the plan remembers which reference paid for it', Store.db.settings.plan.ref === REF);
@@ -97,8 +97,8 @@ function stubFetch(sandbox) {
   console.log('-- the shell cannot pay for itself');
   const t = freshStore(); stubFetch(t.sandbox);
   t.Store.Auth.signup({ name: 'Tried', email: 't@r.gh', password: 'password123' });
-  t.store.setItem(KEY, JSON.stringify([{ ref: REF, status: 'paid', amount: 49 }]));
-  nextBody = { ok: true, order: { ref: REF, status: 'awaiting_approval' } };
+  t.store.setItem(KEY, JSON.stringify([{ ref: REF, status: 'paid', amount: 1 }]));
+  nextBody = { ok: true, order: { ref: REF, status: 'pending' } };
   calls = [];
   const tampered = await t.Store.upgrades.sync();
   check('a "paid" flag typed into local storage grants nothing', tampered === false && t.Store.upgrades.isPro() === false);
@@ -115,7 +115,7 @@ function stubFetch(sandbox) {
   await g.Store.upgrades.sync();
   check('a corrupt resume list is survivable', true);
   g.sandbox.fetch = async () => { throw new Error('offline'); };
-  g.store.setItem(KEY, JSON.stringify([{ ref: REF, status: 'pending', amount: 49 }]));
+  g.store.setItem(KEY, JSON.stringify([{ ref: REF, status: 'pending', amount: 1 }]));
   let threw = false;
   try { await g.Store.upgrades.sync(); } catch (e) { threw = true; }
   check('a server that does not answer is not an error the customer sees', threw === false);
@@ -128,7 +128,7 @@ function stubFetch(sandbox) {
   check('Pro bought through the retired hosted checkout still reads as Pro',
     l.Store.upgrades.isPro() === true && l.Store.upgrades.state().ref === 'SHERPAY-PRO-OLD123');
   l.Store.db.settings.subscription = undefined;
-  l.Store.upgrades.rememberRef({ ref: REF, status: 'pending', amount: 49 });
+  l.Store.upgrades.rememberRef({ ref: REF, status: 'pending', amount: 1 });
   check('and an unfinished payment on that device is still offered back', l.Store.upgrades.resumeRefs().length === 1);
 
   console.log('-- the Pro sheet the customer actually sees');
@@ -144,11 +144,11 @@ function stubFetch(sandbox) {
   }
   w.Store.boot();
   w.Store.Auth.signup({ name: 'Ama Owusu', email: 'ama@studio.gh', password: 'password123' });
-  w.localStorage.setItem(KEY, JSON.stringify([{ ref: REF, status: 'awaiting_approval', amount: 49, currency: 'GHS', provider: 'mtn', account: '024 555 \u2022\u2022\u2022 10' }]));
+  w.localStorage.setItem(KEY, JSON.stringify([{ ref: REF, status: 'pending', amount: 1, currency: 'GHS', provider: 'mtn', account: '024 555 \u2026' }]));
   w.fetch = async (_url, init) => {
     const body = JSON.parse((init && init.body) || '{}');
     return { ok: true, status: 200, json: async () => (body.action === 'status'
-      ? { ok: true, order: { ref: REF, status: 'paid', amount: 49, amount_paid: 49, provider: 'mtn', paid_at: '2026-10-06T10:02:00Z' } }
+      ? { ok: true, order: { ref: REF, status: 'paid', amount: 1, amount_paid: 1, provider: 'mtn', paid_at: '2026-10-06T10:02:00Z' } }
       : { ok: true, order: {} }) };
   };
   w.UI.start();
@@ -156,7 +156,7 @@ function stubFetch(sandbox) {
   const sheet = () => w.document.getElementById('modal-root');
   click(w.document.querySelector('[data-action="pro"]'));
   check('the sheet quotes the price, the length and the method',
-    /49/.test(sheet().textContent) && /12 months/.test(sheet().textContent) && /Mobile Money/.test(sheet().textContent));
+    new RegExp(Store.upgrades.price('pro').amount + '(\\.00)?\\b').test(sheet().textContent) && /12 months/.test(sheet().textContent) && /Mobile Money/.test(sheet().textContent));
   check('the offer names the wallets a Ghanaian business actually uses',
     /MTN MoMo/.test(sheet().textContent) && /Telecel Cash/.test(sheet().textContent) && /AT Money/.test(sheet().textContent));
   check('and says outright that the wallet PIN is never asked for',

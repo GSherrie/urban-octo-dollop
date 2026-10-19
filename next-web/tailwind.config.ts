@@ -25,34 +25,38 @@ const config: Config = {
           900: "#06244B",
           950: "#041C3A",
         },
+        /* Semantic colours resolve to CSS variables so a single
+           <html data-theme="dark"> flip re-skins the whole app — see
+           app/globals.css for the light + dark token values. */
         ink: {
-          DEFAULT: "#101828",
-          secondary: "#475467",
-          tertiary: "#667085",
+          DEFAULT: "var(--ink)",
+          secondary: "var(--ink-secondary)",
+          tertiary: "var(--ink-tertiary)",
         },
         surface: {
-          DEFAULT: "#FFFFFF",
-          subtle: "#F8FAFC",
-          muted: "#F1F5F9",
+          DEFAULT: "var(--surface)",
+          subtle: "var(--surface-subtle)",
+          muted: "var(--surface-muted)",
         },
         line: {
-          DEFAULT: "#E4E9F0",
-          soft: "#EEF2F7",
+          DEFAULT: "var(--line)",
+          soft: "var(--line-soft)",
+          strong: "var(--line-strong)",
         },
         success: {
-          DEFAULT: "#12805C",
-          soft: "#E6F6EE",
-          border: "#BFE6D2",
+          DEFAULT: "var(--success)",
+          soft: "var(--success-soft)",
+          border: "var(--success-border)",
         },
         danger: {
-          DEFAULT: "#C4320A",
-          soft: "#FDEEEC",
-          border: "#F5C6C0",
+          DEFAULT: "var(--danger)",
+          soft: "var(--danger-soft)",
+          border: "var(--danger-border)",
         },
         warning: {
-          DEFAULT: "#9A6700",
-          soft: "#FEF3E2",
-          border: "#F5D9A8",
+          DEFAULT: "var(--warning)",
+          soft: "var(--warning-soft)",
+          border: "var(--warning-border)",
         },
       },
       fontFamily: {

@@ -270,11 +270,14 @@
   UI.VIEWS.expenses.__scan = scanModal;
 
   /* ================= TIME TRACKING ================= */
-  // running timer survives reloads (persisted separately from the main db)
+  // running timer survives reloads (persisted separately from the main db,
+  // scoped per account like the workspace itself so users never see
+  // each other's running jobs)
   const TIMER_KEY = 'sherpay_timer_v1';
+  const timerKey = () => { try { return (S.Auth && S.Auth.current() && S.Auth.current().id) ? TIMER_KEY + ':' + S.Auth.current().id : TIMER_KEY; } catch (e) { return TIMER_KEY; } };
   let running = null; // {clientId, desc, startedAt}
-  try { running = JSON.parse(localStorage.getItem(TIMER_KEY) || 'null') || null; } catch (e) { running = null; }
-  const persistTimer = () => { try { if (running) localStorage.setItem(TIMER_KEY, JSON.stringify(running)); else localStorage.removeItem(TIMER_KEY); } catch (e) {} };
+  try { running = JSON.parse(localStorage.getItem(timerKey()) || 'null') || null; } catch (e) { running = null; }
+  const persistTimer = () => { try { if (running) localStorage.setItem(timerKey(), JSON.stringify(running)); else localStorage.removeItem(timerKey()); } catch (e) {} };
   UI.VIEWS.time = function () {
     const rate = S.db.settings.hourlyRate;
     function fmtDur(ms) {

@@ -140,26 +140,111 @@ alter table public.expenses enable row level security;
 alter table public.income enable row level security;
 alter table public.transactions enable row level security;
 
-create policy "profiles: users can view own profile"
-  on public.profiles for select using (auth.uid() = user_id);
+create policy "profiles_select_own"
+  on public.profiles for select
+  to authenticated
+  using (auth.uid() = user_id);
 
-create policy "profiles: users can insert own profile"
-  on public.profiles for insert with check (auth.uid() = user_id);
+create policy "profiles_insert_own"
+  on public.profiles for insert
+  to authenticated
+  with check (auth.uid() = user_id);
 
-create policy "profiles: users can update own profile"
-  on public.profiles for update using (auth.uid() = user_id);
+create policy "profiles_update_own"
+  on public.profiles for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
-create policy "categories: users can manage own categories"
-  on public.categories for all using (auth.uid() = user_id);
+create policy "profiles_delete_own"
+  on public.profiles for delete
+  to authenticated
+  using (auth.uid() = user_id);
 
-create policy "expenses: users can manage own expenses"
-  on public.expenses for all using (auth.uid() = user_id);
+create policy "categories_select_own"
+  on public.categories for select
+  to authenticated
+  using (auth.uid() = user_id);
 
-create policy "income: users can manage own income"
-  on public.income for all using (auth.uid() = user_id);
+create policy "categories_insert_own"
+  on public.categories for insert
+  to authenticated
+  with check (auth.uid() = user_id);
 
-create policy "transactions: users can manage own transactions"
-  on public.transactions for all using (auth.uid() = user_id);
+create policy "categories_update_own"
+  on public.categories for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "categories_delete_own"
+  on public.categories for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "expenses_select_own"
+  on public.expenses for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "expenses_insert_own"
+  on public.expenses for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "expenses_update_own"
+  on public.expenses for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "expenses_delete_own"
+  on public.expenses for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "income_select_own"
+  on public.income for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "income_insert_own"
+  on public.income for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "income_update_own"
+  on public.income for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "income_delete_own"
+  on public.income for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "transactions_select_own"
+  on public.transactions for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "transactions_insert_own"
+  on public.transactions for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "transactions_update_own"
+  on public.transactions for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "transactions_delete_own"
+  on public.transactions for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
 
 -- ---------------------------------------------------------------------------
 -- auto-create profile on auth signup

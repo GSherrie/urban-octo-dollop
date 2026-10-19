@@ -91,9 +91,11 @@ function boot(src, replies, search) {
   check('an unknown wallet is not a wallet', core.providerById('mpesa') === null && core.providerById('MTN').id === 'mtn');
 
   console.log('-- the price is ours, not the browser\'s');
-  const order = issue({ amount: 1, currency: 'USD', status: 'paid' }).row;
+  // The client's number has to be one no real price could ever be — it used to
+  // be 1, which is what the Pro order now legitimately costs.
+  const order = issue({ amount: 0.01, currency: 'USD', status: 'paid' }).row;
   check('a one-time Pro order is priced by the server', order.amount === core.PLAN_PRICES.pro.yearly && order.currency === 'GHS');
-  check('an amount sent by a client cannot become the charge', order.amount !== 1 && order.currency !== 'USD');
+  check('an amount sent by a client cannot become the charge', order.amount !== 0.01 && order.currency !== 'USD');
   check('a client cannot pre-pay its own order', order.status === 'created' && order.paid_at === null && order.granted_at === null);
   check('an unknown plan is refused', core.planPrice('enterprise') === null && core.issueOrder(Object.assign({}, GOOD, { plan: 'free' })).ok === false);
   check('bad email, wallet or number is refused, naming the field that failed',
@@ -132,13 +134,13 @@ function boot(src, replies, search) {
 
   console.log('-- the state a wallet payment walks through');
   const soon = new Date('2026-10-06T10:05:00Z'), late = new Date('2026-10-06T11:00:00Z');
-  check('a pushed charge waits for the handset instead of claiming success',
-    core.nextStatus('pending', 'pending', soon, order.expires_at) === 'awaiting_approval');
-  check('approving it pays the order', core.nextStatus('awaiting_approval', 'success', soon, order.expires_at) === 'paid');
-  check('declining it fails the order', core.nextStatus('awaiting_approval', 'failed', soon, order.expires_at) === 'failed');
-  check('half an hour of silence expires the order', core.nextStatus('awaiting_approval', 'pending', late, order.expires_at) === 'expired');
+  check('a charge waits for the provider instead of claiming success',
+    core.nextStatus('pending', 'pending', soon, order.expires_at) === 'pending');
+  check('a successful charge pays the order', core.nextStatus('pending', 'success', soon, order.expires_at) === 'paid');
+  check('a failed charge fails the order', core.nextStatus('pending', 'failed', soon, order.expires_at) === 'failed');
+  check('half an hour of silence expires the order', core.nextStatus('pending', 'pending', late, order.expires_at) === 'expired');
   check('a dead connection changes nothing — that is not a failed payment',
-    core.nextStatus('awaiting_approval', '', soon, order.expires_at) === 'awaiting_approval');
+    core.nextStatus('pending', '', soon, order.expires_at) === 'pending');
   check('an expired reference is not revived by a late webhook',
     core.nextStatus('expired', 'success', late, order.expires_at) === 'expired');
   check('a paid order stays paid', core.nextStatus('paid', 'failed', late, order.expires_at) === 'paid');
@@ -174,16 +176,17 @@ function boot(src, replies, search) {
   const DEFAULT_ANON = (/DEFAULT_SUPABASE_ANON\s*=\s*'([^']+)'/.exec(PAGE_SRC) || [])[1] || '';
   const REF2 = core.newReference();
   const OPEN = {
-    ref: REF2, status: 'awaiting_approval', plan: 'pro', billing: 'annual', amount: 49, currency: 'GHS',
+    ref: REF2, status: 'pending', plan: 'pro', billing: 'annual', amount: 1, currency: 'GHS',
     provider: 'mtn', account: '024 555 \u2022\u2022\u2022 10', email: 'a\u2022\u2022\u2022@studio.gh',
-    message: 'Waiting for you to approve the prompt on your phone.', checkout_url: 'https://paystack.example/hosted'
+    message: 'Waiting for you to approve the payment on Paystack…', checkout_url: 'https://paystack.example/hosted'
   };
-  const PAID = Object.assign({}, OPEN, { status: 'paid', amount_paid: 49, checkout_url: '' });
+  const PAID = Object.assign({}, OPEN, { status: 'paid', amount_paid: 1, checkout_url: '' });
   check('the shipping bundle is unpatched (the tokens are a hook, not a config)',
     PAGE_SRC.indexOf('__SUPABASE_URL__') > -1 && DEFAULT_URL.indexOf('supabase.co') > -1 && DEFAULT_ANON.indexOf('__') === -1);
 
   const live = boot(PAGE_SRC, { init: { body: { ok: true, order: OPEN } } });
-  check('it names the plan, the price and the length', /49/.test(live.el('amt').textContent) && /12 months/.test(live.el('amt').textContent));
+  check('it names the plan, the price and the length',
+    new RegExp(core.PLAN_PRICES.pro.yearly + '(\\.00)?\\b for 12 months').test(live.el('amt').textContent));
   check('all three Ghana wallets are offered', live.el('wallets').querySelectorAll('input[name=provider]').length === 3);
   check('it says the thing a card page never has to say',
     /approve the payment on your phone/i.test(live.el('sub').textContent));

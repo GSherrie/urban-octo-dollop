@@ -3,8 +3,61 @@
 @tailwind utilities;
 
 :root {
+  /* Semantic palette — the dark block below flips wholesale when the inline
+     boot script in app/layout.tsx sets <html data-theme="dark">. The preference
+     is shared with the vanilla app (db.settings.preferences.theme), mirrored to
+     localStorage "sherpay_theme" by UI.applyTheme(); "system" follows the OS. */
+  color-scheme: light;
   --background: #f6f8fb;
   --foreground: #101828;
+  --ink: #101828;
+  --ink-secondary: #475467;
+  --ink-tertiary: #667085;
+  --surface: #ffffff;
+  --surface-subtle: #f8fafc;
+  --surface-muted: #f1f5f9;
+  --line: #e4e9f0;
+  --line-soft: #eef2f7;
+  --line-strong: #c6d2e2;
+  --success: #12805c;
+  --success-soft: #e6f6ee;
+  --success-border: #bfe6d2;
+  --danger: #c4320a;
+  --danger-soft: #fdeeec;
+  --danger-border: #f5c6c0;
+  --warning: #9a6700;
+  --warning-soft: #fef3e2;
+  --warning-border: #f5d9a8;
+  --selection: #cfe1fd;
+  --focus: #0f4bd1;
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0b1220;
+  --foreground: #e8eef7;
+  --ink: #e8eef7;
+  --ink-secondary: #9cb0c7;
+  --ink-tertiary: #7f92aa;
+  --surface: #121c2e;
+  --surface-subtle: #101b2c;
+  --surface-muted: #182537;
+  --line: #25344c;
+  --line-soft: #1b2739;
+  --line-strong: #33445f;
+  --success: #3ecf99;
+  --success-soft: #12312a;
+  --success-border: #1e5340;
+  --danger: #ff8a7a;
+  --danger-soft: #391e1b;
+  --danger-border: #5c2b24;
+  --warning: #f5b547;
+  --warning-soft: #33270f;
+  --warning-border: #5c4517;
+  --selection: #2a4a74;
+  --focus: #5b82f1;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 html {
@@ -22,11 +75,11 @@ body {
 }
 
 ::selection {
-  background: #cfe1fd;
+  background: var(--selection);
 }
 
 :focus-visible {
-  outline: 2px solid #0f4bd1;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -54,7 +107,7 @@ body {
     @apply mb-1.5 block text-[13px] font-medium text-ink-secondary;
   }
   .sp-input {
-    @apply block w-full rounded-md border border-line bg-white px-3 py-2.5 text-[14px] text-ink placeholder:text-ink-tertiary shadow-xs transition-colors hover:border-[#C6D2E2] focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary;
+    @apply block w-full rounded-md border border-line bg-surface px-3 py-2.5 text-[14px] text-ink placeholder:text-ink-tertiary shadow-xs transition-colors hover:border-line-strong focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary;
   }
   .sp-hint {
     @apply mt-1.5 text-xs leading-5 text-ink-tertiary;
@@ -69,13 +122,13 @@ body {
     @apply bg-brand-600 text-white shadow-xs hover:bg-brand-700 active:bg-brand-800 disabled:bg-brand-600;
   }
   .sp-btn-secondary {
-    @apply border border-line bg-white text-ink shadow-xs hover:bg-surface-subtle hover:border-[#C6D2E2] active:bg-surface-muted;
+    @apply border border-line bg-surface text-ink shadow-xs hover:bg-surface-subtle hover:border-line-strong active:bg-surface-muted;
   }
   .sp-btn-ghost {
     @apply text-ink-secondary hover:bg-surface-muted hover:text-ink active:bg-line-soft;
   }
   .sp-btn-danger {
-    @apply border border-danger-border bg-white text-danger hover:bg-danger-soft active:bg-danger-soft;
+    @apply border border-danger-border bg-surface text-danger hover:bg-danger-soft active:bg-danger-soft;
   }
   .sp-icon-btn {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-tertiary transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-600;

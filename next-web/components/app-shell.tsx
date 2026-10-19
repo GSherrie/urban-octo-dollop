@@ -41,7 +41,7 @@ export default function AppShell({ title, sub, actions, children }: Props) {
   };
   return (
     <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-white md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface md:flex">
         <div className="px-5 pb-4 pt-6">
           <Link href="/dashboard" aria-label="SherPay dashboard"><BrandLockup sub="Money management" /></Link>
         </div>
@@ -62,7 +62,7 @@ export default function AppShell({ title, sub, actions, children }: Props) {
           <button type="button" onClick={signOut} disabled={out} className="sp-btn sp-btn-ghost w-full"><LogOut className="h-4 w-4" aria-hidden="true" />{out ? "Signing out…" : "Sign out"}</button>
         </div>
       </aside>
-      <header className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur md:ml-60">
+      <header className="sticky top-0 z-30 border-b border-line bg-surface backdrop-blur md:ml-60">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
           <button type="button" className="sp-icon-btn md:hidden" aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>{menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
           <Link href="/dashboard" className="md:hidden" aria-label="SherPay dashboard"><BrandLockup /></Link>
@@ -76,7 +76,7 @@ export default function AppShell({ title, sub, actions, children }: Props) {
           </div>
         </div>
         {quickOpen ? (
-          <div className="border-t border-line-soft bg-white px-4 py-3 md:hidden">
+          <div className="border-t border-line-soft bg-surface px-4 py-3 md:hidden">
             <div className="grid grid-cols-2 gap-2">
               <Link href="/expenses/new" className="sp-btn sp-btn-secondary" onClick={() => setQuickOpen(false)}>Add expense</Link>
               <Link href="/income/new" className="sp-btn sp-btn-primary" onClick={() => setQuickOpen(false)}>Add income</Link>
@@ -85,7 +85,7 @@ export default function AppShell({ title, sub, actions, children }: Props) {
         ) : null}
 
         {menuOpen ? (
-          <nav aria-label="Mobile" className="border-t border-line-soft bg-white px-3 py-3 md:hidden">
+          <nav aria-label="Mobile" className="border-t border-line-soft bg-surface px-3 py-3 md:hidden">
             <div className="grid gap-1">
               {NAV.map((i) => {
                 const Icon = i.icon;
@@ -110,7 +110,7 @@ export default function AppShell({ title, sub, actions, children }: Props) {
           </div>
           {children}
         </main>
-        <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+        <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
           <div className="grid grid-cols-5">
             {MOBILE.map((i) => {
               const Icon = i.icon;

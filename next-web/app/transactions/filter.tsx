@@ -20,7 +20,7 @@ export default function TxFilter({ type, q, rows, currency }: { type: string; q:
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="flex gap-1 rounded-md border border-line bg-white p-1" role="tablist" aria-label="Filter by type">
+        <div className="flex gap-1 rounded-md border border-line bg-surface p-1" role="tablist" aria-label="Filter by type">
           {(["all", "income", "expense"] as const).map((t) => (
             <button key={t} type="button" role="tab" aria-selected={type === t} onClick={() => go(t)} className={cn("min-h-[36px] flex-1 rounded px-3 text-[13px] font-medium capitalize transition-colors sm:flex-none", type === t ? "bg-brand-600 text-white" : "text-ink-secondary hover:bg-surface-subtle")}>{t === "all" ? "All" : t}</button>
           ))}

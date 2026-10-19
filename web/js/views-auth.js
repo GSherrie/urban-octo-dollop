@@ -2,6 +2,7 @@
 (function () {
   const S = window.Store, UI = window.UI;
   const icon = UI.icon, esc = S.esc;
+  const authService = () => S.cloud && (S.cloud.authEnabled ? S.cloud.authEnabled() : S.cloud.enabled()) ? S.Auth.cloudAuth : S.Auth;
 
   /* Rendered by UI.start() whenever there is no active session.
      Replaces the whole #app shell; on success hands control back to UI.start(). */
@@ -113,7 +114,7 @@
       if (forgot) forgot.addEventListener('click', async () => {
         const email = (root.querySelector('#au-email') || {}).value || '';
         if (!email.trim()) { showErr('Enter your email above first, then tap Forgot password.'); return; }
-        const res = await S.Auth.sendReset(email);
+        const res = await S.Auth.cloudAuth.sendReset(email);
         showErr(res && res.ok
           ? 'Reset link sent to ' + email + ' — check your inbox (and spam).'
           : (res && res.error || 'Could not send a reset link right now.'));
@@ -129,12 +130,12 @@
           if (!g('au-name').trim()) return showErr('Please enter your name.');
           if (!g('au-email').trim()) return showErr('Please enter your email.');
           if (!root.querySelector('#au-terms').checked) return showErr('Please accept the Terms & Privacy Policy to continue.');
-          res = await S.Auth.signup({ name: g('au-name'), email: g('au-email'), password: g('au-pass') });
+          res = await authService().signup({ name: g('au-name'), email: g('au-email'), password: g('au-pass') });
           if (res && res.needsConfirmation) return showErr(res.message);
         } else {
           if (!g('au-email').trim()) return showErr('Please enter your email.');
           if (!g('au-pass')) return showErr('Please enter your password.');
-          res = await S.Auth.login({ email: g('au-email'), password: g('au-pass'), remember: root.querySelector('#au-remember').checked });
+          res = await authService().login({ email: g('au-email'), password: g('au-pass'), remember: root.querySelector('#au-remember').checked });
         }
         if (res.error) return showErr(res.error);
         busy = true;

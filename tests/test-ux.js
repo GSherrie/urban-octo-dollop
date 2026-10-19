@@ -90,8 +90,8 @@ const check = (name, cond) => { if (cond) { pass++; console.log('  ok  ' + name)
     $('#ed-bar-total').textContent === $('#ed-totals .tr.grand b').textContent.trim());
   click($('#ed-bar [data-action="save"]'));
   check('a save that cannot go through says so inside the form', !!$('#view .form-err') && $('#view .form-err').getAttribute('role') === 'alert');
-  check('the field at fault admits it', !!$('#ed-client.bad') && $('#ed-client').getAttribute('aria-invalid') === 'true' && !!$('#ed-client').parentNode.querySelector('.field-err'));
-  check('and takes focus so the keyboard/reader lands on it', w.document.activeElement === $('#ed-client'));
+  check('the field at fault admits it', !!$('#ed-new-name.bad') && $('#ed-new-name').getAttribute('aria-invalid') === 'true' && !!$('#ed-new-name').parentNode.querySelector('.field-err'));
+  check('and takes focus so the keyboard/reader lands on it', w.document.activeElement === $('#ed-new-name'));
 
   console.log('-- unsaved work: asked once, never thrown away quietly');
   nav('#/invoices/new');

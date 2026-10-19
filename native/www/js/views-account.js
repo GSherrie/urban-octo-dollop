@@ -279,12 +279,26 @@
     root.querySelectorAll('.theme-chip').forEach((c) => c.classList.toggle('active', c.dataset.theme === t));
   }
 
-  /* ================= delete account ================= */
+  /* ================= delete account =================
+     Deletes THIS account's workspace + its scoped caches. Other accounts on
+     this device are untouched (their sherpay_db_v1:<id> keys stay). */
   function deleteAccount() {
-    ['sherpay_db_v1', 'sherpay_users_v1', 'sherpay_session_v1', 'sherpay_sync_v1', 'sherpay_conflict_v1'].forEach((k) => {
+    const u = S.Auth.current();
+    const keys = ['sherpay_users_v1', 'sherpay_session_v1'];
+    if (u && u.id) keys.push('sherpay_db_v1:' + u.id, 'sherpay_sync_v1:' + u.id, 'sherpay_conflict_v1:' + u.id, 'sherpay_timer_v1:' + u.id);
+    keys.forEach((k) => {
       try { localStorage.removeItem(k); } catch (e) {}
       try { sessionStorage.removeItem(k); } catch (e) {}
     });
+    // legacy leftovers from before per-user scoping (shared keys): only safe
+    // to drop when nobody else on this device holds an account
+    try {
+      const others = (S.Auth.list ? S.Auth.list() : []).filter((x) => !u || x.id !== u.id);
+      if (!others.length) ['sherpay_db_v1', 'sherpay_sync_v1', 'sherpay_conflict_v1', 'sherpay_timer_v1'].forEach((k) => {
+        try { localStorage.removeItem(k); } catch (e) {}
+        try { sessionStorage.removeItem(k); } catch (e) {}
+      });
+    } catch (e) {}
     try {
       if (window.supabase) Object.keys(localStorage).filter((k) => k.indexOf('sb-') === 0).forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} });
     } catch (e) {}
@@ -332,7 +346,10 @@
         const confirm = m.querySelector('#pw-confirm').value;
         if (next !== confirm) { UI.toast('New passwords do not match', 'red', 'alert'); return; }
         const btn = m.querySelector('#pw-save'); btn.disabled = true; btn.textContent = 'Updating…';
-        const res = await S.Auth.changePassword({ currentPassword: currentPw, newPassword: next });
+        // Same cloud-aware picker as login: cloud accounts change the password
+        // in Supabase, device accounts in local storage.
+        const auth = S.cloud && (S.cloud.authEnabled ? S.cloud.authEnabled() : S.cloud.enabled()) ? S.Auth.cloudAuth : S.Auth;
+        const res = await auth.changePassword({ currentPassword: currentPw, newPassword: next });
         if (res.error) { btn.disabled = false; btn.textContent = 'Update password'; UI.toast(res.error, 'red', 'alert'); return; }
         UI.closeModal();
         UI.toast('Password updated', 'green', 'lock');
@@ -560,30 +577,24 @@
              guards; the (async in cloud mode) sign-out settles underneath. */
           location.hash = '#/auth';
           UI.closeModal();
-          Promise.resolve(S.Auth.logout()).then(() => {
+          const auth = S.cloud && (S.cloud.authEnabled ? S.cloud.authEnabled() : S.cloud.enabled()) ? S.Auth.cloudAuth : S.Auth;
+          Promise.resolve(auth.logout()).then(() => {
             UI.toast('Signed out — see you soon!', 'green', 'lock');
             UI.render(true);
-          });
+          }).catch((e) => UI.toast('Could not sign out: ' + ((e && e.message) || 'try again'), 'red', 'alert'));
                 },
         'signout-all': async () => {
-          try { await S.Auth.signOutEverywhere(); UI.toast('Other sessions ended — this device stays signed in', 'green', 'cloudOff'); }
+          try {
+            const auth = S.cloud && (S.cloud.authEnabled ? S.cloud.authEnabled() : S.cloud.enabled()) ? S.Auth.cloudAuth : S.Auth;
+            if (!auth.signOutEverywhere) throw new Error('Signing out everywhere requires a cloud account.');
+            await auth.signOutEverywhere();
+            UI.toast('Other sessions ended — this device stays signed in', 'green', 'cloudOff');
+          }
           catch (e) { UI.toast('Could not end other sessions: ' + ((e && e.message) || 'try again'), 'red', 'alert'); }
         },
         'delete-account': () => UI.confirmDialog('Delete your account?', 'This permanently removes all invoices, clients, expenses and settings stored on this device. This cannot be undone.', deleteAccount, 'Delete everything'),
-        'cloud-sync': async () => {
-          if (!S.cloud.enabled()) { UI.toast('Cloud sync is off — enable it in Settings ▸ Cloud sync', 'amber', 'cloud'); return; }
-          UI.toast('Syncing…', 'blue', 'sync');
-          try {
-            const r = await S.cloud.sync();
-            if (r && r.ok === false) {
-              /* an unsuccessful sync must never be reported as "up to date" */
-              if (!r.auth) UI.alertError('Cloud sync did not run', (r.error || 'The cloud account could not be reached') + '. Your work is saved on this device; nothing was uploaded.');
-            } else {
-              UI.toast(r.action === 'pushed' ? 'Workspace uploaded' : r.action === 'pulled' ? (r.conflict ? 'Updated — an older copy was archived' : 'Latest version downloaded') : 'Already up to date', r.conflict ? 'amber' : 'green', 'sync');
-            }
-            UI.render(true);
-          } catch (e) { UI.toast('Sync failed: ' + (e.message || e), 'red', 'alert'); }
-        }
+        /* "Sync now" lives in ui.js (cloudSyncNow) as one shared handler —
+           the topbar status chip and this row both route through it. */
       },
       mount: function (root) {
     const bind = (id, fn) => {

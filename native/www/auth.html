@@ -27,7 +27,14 @@
   var $ = function (id) { return document.getElementById(id); };
   try {
     var cfg = null;
-    try { cfg = JSON.parse(localStorage.getItem('sherpay_db_v1') || 'null'); } catch (e) {}
+    // per-user cloud config: the session belongs to one account, so read the
+    // cloud block from a sherpay_db_v1:<userId> cache only — never the legacy
+    // shared key, which may hold another account's workspace.
+    for (var i = 0; i < localStorage.length && !cfg; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf('sherpay_db_v1:') !== 0) continue;
+      try { cfg = JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { cfg = null; }
+    }
     var c = cfg && cfg.settings && cfg.settings.cloud;
     if (!c || !c.enabled || !c.url || !c.anonKey) throw new Error('Cloud sync is not configured on this device. Open the app, enable it in Settings, then use this link again.');
     /* detectSessionInUrl (default on) exchanges the email-link token here;

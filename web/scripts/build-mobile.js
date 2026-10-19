@@ -10,7 +10,7 @@ let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 // the asset version (?v=N) doubles as the build tag for this offline copy
 const build = 'v' + ((html.match(/\?v=(\d+)/) || [])[1] || '0');
 const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
-const jsFiles = ['js/store.js', 'js/ui.js', 'js/views-auth.js', 'js/views-main.js', 'js/views-editor.js', 'js/views-ops.js', 'js/views-biz.js', 'js/views-account.js'];
+const jsFiles = ['js/store.js', 'js/ui.js', 'js/views-auth.js', 'js/views-main.js', 'js/views-inventory.js', 'js/views-editor.js', 'js/views-ops.js', 'js/views-biz.js', 'js/views-account.js'];
 const js = jsFiles.map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n;\n');
 const logoB64 = fs.readFileSync(path.join(root, 'assets/icon-512.png')).toString('base64');
 const LOGO = 'data:image/png;base64,' + logoB64;

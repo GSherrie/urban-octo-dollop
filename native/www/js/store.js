@@ -3,6 +3,26 @@ window.Store = (function () {
   const DB_KEY = 'sherpay_db_v1';
   const USERS_KEY = 'sherpay_users_v1';
   const SESSION_KEY = 'sherpay_session_v1';
+
+  /* ---------------- per-user workspaces ----------------
+     One device, many logins: the workspace is scoped to the signed-in
+     account, never shared. Supabase is the source of truth when cloud sync
+     is on (one cloud_state row per user_id, RLS-enforced); localStorage is
+     only a per-user offline cache keyed sherpay_db_v1:<userId>.
+     The legacy shared sherpay_db_v1 key is treated as a one-time migration
+     source: the first account to sign in on an upgraded device adopts it,
+     every later account starts blank. */
+  let activeUserId = null;
+  const dbKeyFor = (uid) => (uid ? DB_KEY + ':' + uid : DB_KEY);
+  function readSessionUserId() {
+    try {
+      const raw = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(SESSION_KEY)) || localStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      const sess = JSON.parse(raw);
+      return (sess && sess.userId) || null;
+    } catch (e) { return null; }
+  }
+  function currentDbKey() { return dbKeyFor(activeUserId || readSessionUserId()); }
   let dataError = null;  // why the saved workspace could not be opened, if it could not
 
   const CURRENCIES = ['GHS','USD','EUR','GBP','NGN','KES','ZAR','CAD','AUD','INR','AED','JPY'];
@@ -65,11 +85,12 @@ window.Store = (function () {
 
   /* ---------------- state ---------------- */
   let db = null;
+  let cloudAuthEnabled = true, cloudAuthUrl = DEFAULT_CLOUD_URL, cloudAuthAnonKey = DEFAULT_CLOUD_ANON;
 
   let saveWarned = false;
   function save() {
     try { db.settings.updatedAt = Date.now(); } catch (e) {}
-    try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+    try { localStorage.setItem(currentDbKey(), JSON.stringify(db)); }
     catch (e) {
       if (!saveWarned && typeof window !== 'undefined' && window.UI && window.UI.toast) {
         saveWarned = true;
@@ -96,7 +117,20 @@ window.Store = (function () {
   }
   function load() {
     try {
-      const raw = localStorage.getItem(DB_KEY);
+      // 1) this account's own cache — the normal case after first sign-in
+      let raw = null;
+      try { raw = localStorage.getItem(currentDbKey()); } catch (e) { raw = null; }
+      // 2) one-time adoption: an upgraded device still holds the old shared
+      //    workspace. Only an account with NO cache of its own may adopt it,
+      //    and only once — afterwards the shared key is removed so the next
+      //    account can never see it.
+      if (!raw) {
+        try { raw = localStorage.getItem(DB_KEY); } catch (e) { raw = null; }
+        if (raw) {
+          try { localStorage.setItem(currentDbKey(), raw); } catch (e) {}
+          try { localStorage.removeItem(DB_KEY); } catch (e) {}
+        }
+      }
       if (raw) {
         db = JSON.parse(raw);
         // Migrate older workspaces: cloud sync defaults to ON against the
@@ -136,7 +170,9 @@ window.Store = (function () {
       },
       clients: [], invoices: [], expenses: [],
       timeEntries: [],
-      activity: []
+      activity: [],
+      inventory: []
+
     };
     save();
   }
@@ -155,6 +191,10 @@ window.Store = (function () {
   /* ---------------- sample dataset (optional, user-initiated) ---------------- */
   function demoData() {
     const T = todayISO();
+    /* The plan and cloud login are account facts, not workspace data — replacing
+       the workspace with the sample set must never cost a paid Pro its tier
+       ("paying once must not be undone"). */
+    const prev = (db && db.settings) || {};
     const biz = {
       name: 'Sherline Studio',
       email: 'billing@sherline.studio',
@@ -206,6 +246,13 @@ window.Store = (function () {
       { id:'e6', date:addDays(T, -6), merchant:'Adobe Creative Cloud', category:'Software', tax:11.9, total:91.9, notes:'Annual renewal instalment' },
       { id:'e7', date:addDays(T, -2), merchant:'Bolt', category:'Travel', tax:12.0, total:92.0, notes:'Airport run — client pickup' }
     ];
+    /* Sample stock so the Inventory view has something to show on Load demo. */
+    const inventory = [
+      { id:'inv1', sku:'BAT-4PK', name:'AA Alkaline Batteries (4-pack)', qty:84, unit:'box', cost:18.5, note:'CS-friendly stocking' },
+      { id:'inv2', sku:'LED-10W', name:'LED Downlight 10W', qty:32, unit:'box', cost:42, note:'' },
+      { id:'inv3', sku:'Misc-01', name:'Generic Office Supplies', qty:210, unit:'unit', cost:3.25, note:'' },
+      { id:'inv4', sku:'PPC-500', name:'500g Coffee beans', qty:16, unit:'jar', cost:9.75, note:'Per client PO' }
+    ];
     db = {
       version: 1,
       settings: {
@@ -215,9 +262,12 @@ window.Store = (function () {
         prefix: 'INV', seq: 8,
         template: { accent: 'blue', font: 'sans' },
         reminderDays: [3, 0, -3],
-        hourlyRate: 450
+        hourlyRate: 450,
+        plan: prev.plan || null,
+        subscription: prev.subscription || null,
+        cloud: prev.cloud
       },
-      clients, invoices, expenses,
+      clients, invoices, expenses, inventory,
       timeEntries: [],
       activity: [
         { id: uid(), ts: Date.now() - 86400000 * 6, type: 'paid', message: 'Invoice INV-2026-003 paid by Volta Foods PLC (Bank Transfer)' },
@@ -298,7 +348,7 @@ window.Store = (function () {
   const PLANS = {
     pro: {
       code: 'pro', title: 'SherPay Pro', currency: 'GHS',
-      price: 49, months: 12,
+      price: 1, months: 12,
       blurb: 'Mileage GPS tracker, inventory, client portal & accounting sync',
       features: ['Mileage Tracker', 'Inventory Management', 'Client Portal', 'Accounting Sync', 'Biometric Login'],
       wallets: ['MTN MoMo', 'Telecel Cash', 'AT Money']
@@ -339,6 +389,25 @@ window.Store = (function () {
     return location.origin + location.pathname.replace(/[^/]*$/, '') + 'upgrade.html' + q;
   }
 
+  /* The resume list is deliberately SHARED, not per account: upgrade.html is an
+     unauthenticated page that must hand its reference to whoever is signed in
+     when the app reopens (tests/test-momo-upgrade.js asserts this contract).
+     Isolation is enforced at claim time instead — syncUpgrades() only lets a
+     paid order unlock Pro for the account whose email matches the order's
+     (server-masked) email, so a second login on the same device can neither
+     see a foreign payment finish nor take its plan. */
+  function maskEmail(s) {
+    s = String(s || '');
+    const at = s.indexOf('@');
+    if (at < 1) return s ? s.slice(0, 1) + '\u2022' : '';
+    return s.slice(0, Math.min(2, at)) + '\u2022\u2022\u2022@' + s.slice(at + 1);
+  }
+  function refIsMine(order) {
+    if (!order || !order.email) return true; // older rows carry no email — claimable
+    const u = current();
+    if (!u || !u.email) return false;
+    return String(order.email).toLowerCase() === maskEmail(u.email).toLowerCase();
+  }
   function resumeRefs() {
     try { return JSON.parse(localStorage.getItem(UPGRADE_KEY) || '[]'); } catch (e) { return []; }
   }
@@ -349,6 +418,7 @@ window.Store = (function () {
       ref: order.ref, status: order.status || 'pending', plan: order.plan || 'pro',
       billing: order.billing || 'monthly', amount: order.amount || 0, currency: order.currency || 'GHS',
       provider: order.provider || '', account: order.account || '', checkout_url: order.checkout_url || '',
+      email: order.email || '', // server-masked; lets a second login hide a ref that is not theirs
       at: Date.now()
     });
     try { localStorage.setItem(UPGRADE_KEY, JSON.stringify(list.slice(0, 8))); } catch (e) {}
@@ -403,6 +473,11 @@ window.Store = (function () {
         const order = body && body.order;
         if (!order) continue;
         if (order.status === 'paid') {
+          /* Claiming is guarded: a paid order only unlocks Pro for the account
+             that paid for it (order.email is masked by the server the same way
+             maskEmail masks ours). Another login on this device polls the same
+             shared refs but can never take the plan. */
+          if (!refIsMine(order)) continue;
           forgetRef(r.ref);
           /* Months come from the catalog, not from the order we were handed:
              a plan is what we sell, and the row only records what was bought. */
@@ -422,7 +497,7 @@ window.Store = (function () {
 
   const upgrades = {
     catalog: PLANS, state: planState, isPro, title: planTitle, price: planPrice,
-    link: upgradeLink, resumeRefs, rememberRef, forgetRef, sync: syncUpgrades, applyPlan
+    link: upgradeLink, resumeRefs, rememberRef, forgetRef, sync: syncUpgrades, applyPlan, refIsMine
   };
 
   const getClient = (id) => (db.clients.find((c) => c.id === id) || null);
@@ -438,6 +513,60 @@ window.Store = (function () {
     const total = base + tax;
     const paid = (inv.payments || []).reduce((s, p) => s + num(p.amount), 0);
     return { sub, disc, tax, total, paid, balance: Math.max(0, +(total - paid).toFixed(2)) };
+  }
+
+  /* ---------------- inventory (Pro) ---------------- */
+  function inventoryItem(id) { return (id ? db.inventory.find((i) => i.id === id) : null); }
+
+  function addInventoryItem(patch) {
+    const item = Object.assign({ id: uid(), qty: 0, sku: '', unit: 'unit', cost: 0, note: '' }, patch);
+    db.inventory.push(item);
+    log('inventory', 'Added ' + esc(item.name) + ' — Qty ' + item.qty + ' ' + item.unit);
+    save();
+    return item;
+  }
+
+  function updateInventoryItem(id, patch) {
+    const item = inventoryItem(id); if (!item) return null;
+    Object.assign(item, patch);
+    save();
+    return item;
+  }
+
+  function deleteInventoryItem(id) {
+    const i = db.inventory.findIndex((x) => x.id === id); if (i < 0) return false;
+    db.inventory.splice(i, 1);
+    save();
+    return true;
+  }
+
+  /**
+   * Stock is the only thing an invoice line can touch. When a line carries an
+   * inventory_id, billing it moves that stock out of the room. Each line claims
+   * its quantity once: `line.stock_deducted` remembers what has already left the
+   * shelf, so calling this again on save/resend only moves the difference (and a
+   * line edited down never returns stock — reductions don't restock). Take is
+   * capped at what is on hand, so stock can never go negative.
+   * opts.noSave: the recurring automation at boot deducts silently and lets the
+   * caller decide when to persist (signed-out boot must not write).
+   */
+  function deductInventoryFromInvoice(invoice, opts) {
+    let changed = false;
+    const lines = (invoice && invoice.items) || [];
+    for (const line of lines) {
+      if (!line || !line.inventory_id) continue;
+      const item = inventoryItem(line.inventory_id); if (!item) continue;
+      const want = Math.max(0, num(line.qty) || 0);
+      const already = Math.max(0, num(line.stock_deducted) || 0);
+      const delta = want - already;
+      if (delta <= 0) continue;
+      const take = Math.min(item.qty, delta);
+      item.qty -= take;
+      line.stock_deducted = want;
+      changed = true;
+    }
+    if (changed && !(opts && opts.noSave)) save();
+    return changed;
   }
 
   function displayStatus(inv) {
@@ -490,6 +619,11 @@ window.Store = (function () {
         copy.issueDate = todayISO(); copy.dueDate = addDays(todayISO(), (getClient(inv.clientId) || { terms: 30 }).terms || 30);
         copy.status = 'sent'; copy.sentAt = todayISO(); copy.viewedAt = null; copy.paidAt = null; copy.payments = [];
         copy.reminded = []; // fresh invoice — must not inherit the original's reminder history
+        // each occurrence bills its own stock: strip the original's deduction
+        // history, then claim this cycle's quantities (silently — runAutomations
+        // decides whether to persist, since signed-out boot must not write).
+        (copy.items || []).forEach((l) => { if (l && l.inventory_id) delete l.stock_deducted; });
+        deductInventoryFromInvoice(copy, { noSave: true });
         copy.recurringNext = addMonths(inv.recurringNext, 1);
         inv.recurringNext = copy.recurringNext;
         db.invoices.unshift(copy);
@@ -531,6 +665,9 @@ window.Store = (function () {
     inv.sentAt = todayISO();
     const c = getClient(inv.clientId);
     log('sent', inv.number + ' sent to ' + (c ? c.name : 'client') + ' via ' + channel);
+    // Billing an invoice moves its stock: lines that carry inventory_id leave
+    // the shelf the moment the invoice goes out (idempotent — resends are safe).
+    deductInventoryFromInvoice(inv);
     save();
   }
   function markViewed(invId) {
@@ -659,6 +796,7 @@ window.Store = (function () {
   }
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function normalizedEmail(email) { return String(email || '').trim().toLowerCase(); }
   function getUsers() {
     try { return JSON.parse(localStorage.getItem(USERS_KEY)) || []; } catch (e) { return []; }
   }
@@ -685,11 +823,25 @@ window.Store = (function () {
         localStorage.removeItem(SESSION_KEY);
       }
     } catch (e) {}
+    // bind this tab to the new account and load THEIR workspace only:
+    // own cache, else one-time adoption of the legacy shared key, else blank.
+    // A failed login must never leave the previous user's db in memory.
+    activeUserId = user.id;
+    db = null; dataError = null;
+    if (!load()) { blank(); save(); }
+    else runAutomations(true);
+  }
+
+  function activateCloudWorkspace(userId) {
+    activeUserId = userId;
+    db = null; dataError = null;
+    if (!load()) { blank(); save(); }
+    else runAutomations(true);
   }
 
   function signupLocal(opts) {
     const name = String(opts && opts.name || '').trim();
-    const email = String(opts && opts.email || '').trim().toLowerCase();
+    const email = normalizedEmail(opts && opts.email);
     const password = String(opts && opts.password || '');
     if (!name) return { error: 'Please enter your name.' };
     if (name.length > 80) return { error: 'Name is too long (max 80 characters).' };
@@ -697,7 +849,12 @@ window.Store = (function () {
     const pwErr = validatePassword(password);
     if (pwErr) return { error: pwErr };
     const users = getUsers();
-    if (users.some((u) => u.email === email)) return { error: 'An account with this email already exists — try logging in.' };
+    const duplicate = users.find((u) => normalizedEmail(u.email) === email);
+    if (duplicate) {
+      const sessionUser = users.find((u) => u.id === readSessionUserId());
+      if (sessionUser && normalizedEmail(sessionUser.email) === email) logout();
+      return { error: 'An account with this email already exists — try logging in.' };
+    }
     const salt = uid();
     const user = { id: uid(), name, email, salt, passHash: sha256(salt + ':' + password), createdAt: Date.now() };
     users.push(user);
@@ -712,7 +869,11 @@ window.Store = (function () {
     const remember = !(opts && opts.remember === false);
     const user = getUsers().find((u) => u.email === email);
     if (!user) return { error: 'No account found for this email — try signing up.' };
-    if (user.passHash !== sha256(user.salt + ':' + password)) return { error: 'Incorrect password.' };
+    if (user.passHash !== sha256(user.salt + ':' + password)) {
+      // wrong password: keep whoever is currently signed in exactly as-is —
+      // never blank their workspace because of someone else's typo.
+      return { error: 'Incorrect password.' };
+    }
     startSession(user, remember);
     return { user: publicUser(user) };
   }
@@ -750,6 +911,13 @@ window.Store = (function () {
       localStorage.removeItem(SESSION_KEY);
       if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(SESSION_KEY);
     } catch (e) {}
+    // leave nothing of this account in memory: the next login (even a
+    // different person on this device) must load only their own workspace.
+    // the per-user localStorage caches stay on disk (offline-first), but with
+    // db nulled they can never be read until their owner signs back in.
+    activeUserId = null;
+    db = null; dataError = null;
+    try { if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
   }
 
   function changePasswordLocal(opts) {
@@ -777,6 +945,12 @@ window.Store = (function () {
   const SYNC_KEY = 'sherpay_sync_v1';
   const CONFLICT_KEY = 'sherpay_conflict_v1';
   let cloudClient = null, cloudUser = null, cloudStatus = 'off', cloudLastError = null, cloudLastAction = 'never';
+  let cloudSyncing = false;
+  // sync/conflict markers live beside the workspace they describe — per user
+  function scopedKey(base) {
+    const uid = activeUserId || readSessionUserId() || (cloudUser && cloudUser.id);
+    return uid ? base + ':' + uid : base;
+  }
 
   /* ---------- expired cloud session (loud, once) ---------------------------
      A session that quietly stops authenticating is the worst kind of failure:
@@ -797,6 +971,16 @@ window.Store = (function () {
     if (st === 401 || st === 403) return true;
     return /invalid jwt|jwt expired|jwt is not valid|invalid login credentials|failed to fetch user|session has expired|new authorization information required/i.test(String(e.message || e));
   }
+  /* ---------- live sync listeners (the topbar status chip) ----------------
+     The chip must reflect reality without waiting for a navigation: init,
+     every sync run, and auth failures all announce through this channel. */
+  const cloudSyncListeners = [];
+  function onSync(fn) {
+    if (typeof fn !== 'function') return function () {};
+    cloudSyncListeners.push(fn);
+    return function () { const i = cloudSyncListeners.indexOf(fn); if (i > -1) cloudSyncListeners.splice(i, 1); };
+  }
+  function notifySync() { cloudSyncListeners.slice().forEach((l) => { try { l(); } catch (e) {} }); }
   /* returns true when the problem was the session and has now been reported */
   function noteAuthError(e) {
     if (!isAuthError(e)) return false;
@@ -806,20 +990,21 @@ window.Store = (function () {
       sessionExpiredFired = true;
       sessionExpiredHandlers.slice().forEach((h) => { try { h(); } catch (x) {} });
     }
+    notifySync();
     return true;
   }
 
-  function cloudLastSync() { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || '{"at":0}').at || 0; } catch (e) { return 0; } }
-  function cloudConflict() { try { return JSON.parse(localStorage.getItem(CONFLICT_KEY) || 'null'); } catch (e) { return null; } }
+  function cloudLastSync() { try { return JSON.parse(localStorage.getItem(scopedKey(SYNC_KEY)) || '{"at":0}').at || 0; } catch (e) { return 0; } }
+  function cloudConflict() { try { return JSON.parse(localStorage.getItem(scopedKey(CONFLICT_KEY)) || 'null'); } catch (e) { return null; } }
   function cloudRestoreConflict() {
     const c = cloudConflict();
     if (!c || !c.db) return false;
     db = c.db;
-    try { localStorage.removeItem(CONFLICT_KEY); } catch (e) {}
+    try { localStorage.removeItem(scopedKey(CONFLICT_KEY)); } catch (e) {}
     save(); setSyncMeta(db.settings.updatedAt || Date.now());
     return true;
   }
-  function cloudDiscardConflict() { try { localStorage.removeItem(CONFLICT_KEY); } catch (e) {} }
+  function cloudDiscardConflict() { try { localStorage.removeItem(scopedKey(CONFLICT_KEY)); } catch (e) {} }
   function cloudExportConflict() {
     const c = cloudConflict();
     if (!c || !c.db) return false;
@@ -839,10 +1024,15 @@ window.Store = (function () {
   }
   function cloudOn() {
     const c = db && db.settings && db.settings.cloud;
-    return !!(c && c.enabled && c.url && c.anonKey);
+    if (!c) return false;
+    cloudAuthEnabled = !!(c.enabled && c.url && c.anonKey);
+    cloudAuthUrl = c.url || DEFAULT_CLOUD_URL;
+    cloudAuthAnonKey = c.anonKey || DEFAULT_CLOUD_ANON;
+    return cloudAuthEnabled;
   }
-  function syncMeta() { try { return JSON.parse(localStorage.getItem(SYNC_KEY) || '{"at":0}'); } catch (e) { return { at: 0 }; } }
-  function setSyncMeta(at) { try { localStorage.setItem(SYNC_KEY, JSON.stringify({ at: at || 0 })); } catch (e) {} }
+  function cloudAuthMode() { return db && db.settings && db.settings.cloud ? cloudOn() : cloudAuthEnabled; }
+  function syncMeta() { try { return JSON.parse(localStorage.getItem(scopedKey(SYNC_KEY)) || '{"at":0}'); } catch (e) { return { at: 0 }; } }
+  function setSyncMeta(at) { try { localStorage.setItem(scopedKey(SYNC_KEY), JSON.stringify({ at: at || 0 })); } catch (e) {} }
   function mapUser(u) {
     return {
       id: u.id,
@@ -855,16 +1045,42 @@ window.Store = (function () {
     return location.origin + location.pathname.replace(/[^/]*$/, '') + 'auth.html';
   }
   function archiveConflict() {
-    try { localStorage.setItem(CONFLICT_KEY, JSON.stringify({ at: Date.now(), db: JSON.parse(JSON.stringify(db)) })); } catch (e) {}
+    try { localStorage.setItem(scopedKey(CONFLICT_KEY), JSON.stringify({ at: Date.now(), db: JSON.parse(JSON.stringify(db)) })); } catch (e) {}
   }
-  function hasConflictArchive() { try { return !!localStorage.getItem(CONFLICT_KEY); } catch (e) { return false; } }
+  function hasConflictArchive() { try { return !!localStorage.getItem(scopedKey(CONFLICT_KEY)); } catch (e) { return false; } }
 
+  /* Wrappers: the status chip shows "Syncing…" while a run is in flight and
+     hears about every completion — no call site or return shape changes.
+     A plain sync failure (network/server) is finally visible as status
+     "error"; before, only auth errors ever changed the status, so the app
+     could keep looking connected while nothing was going up. */
   async function cloudInit() {
-    if (!db.settings.cloud || typeof db.settings.cloud !== 'object') db.settings.cloud = {};
-    const cfg = db.settings.cloud;
+    try { return await cloudInitImpl(); }
+    finally { notifySync(); }
+  }
+  async function cloudSync() {
+    cloudSyncing = true; notifySync();
+    try {
+      const r = await cloudSyncImpl();
+      /* a run that succeeded proves the connection — drop a stale failure */
+      if (r && r.ok !== false && (cloudStatus === 'error' || cloudStatus === 'expired')) { cloudStatus = 'on'; cloudLastError = null; }
+      return r;
+    }
+    catch (e) {
+      if (!noteAuthError(e)) { cloudStatus = 'error'; cloudLastError = (e && e.message) || 'Sync failed'; }
+      throw e;   // callers keep their existing error handling
+    }
+    finally { cloudSyncing = false; notifySync(); }
+  }
+  async function cloudInitImpl() {
+    if (db && (!db.settings.cloud || typeof db.settings.cloud !== 'object')) db.settings.cloud = {};
+    const cfg = db ? db.settings.cloud : { enabled: cloudAuthEnabled, url: cloudAuthUrl, anonKey: cloudAuthAnonKey };
     if (!cfg.url) cfg.url = DEFAULT_CLOUD_URL;
     if (!cfg.anonKey) cfg.anonKey = DEFAULT_CLOUD_ANON;
     if (typeof cfg.enabled !== 'boolean') cfg.enabled = true;
+    cloudAuthEnabled = !!(cfg.enabled && cfg.url && cfg.anonKey);
+    cloudAuthUrl = cfg.url;
+    cloudAuthAnonKey = cfg.anonKey;
     if (!cfg.enabled) { cloudStatus = 'off'; cloudClient = null; cloudUser = null; return; }
     cloudStatus = 'connecting';
     try {
@@ -881,11 +1097,12 @@ window.Store = (function () {
       const u = data && data.session && data.session.user;
       cloudUser = u ? mapUser(u) : null;
       cloudStatus = 'on'; cloudLastError = null;
+      if (u) activateCloudWorkspace(u.id);
       if (cloudUser) await cloudSync();
     } catch (e) { if (!noteAuthError(e)) { cloudStatus = 'error'; cloudLastError = (e && e.message) || 'Connection failed'; } }
   }
 
-  async function cloudSync() {
+  async function cloudSyncImpl() {
     if (!cloudClient) return { ok: false, error: 'Cloud sync is off' };
     const { data: ud, error: uErr } = await cloudClient.auth.getUser();
     if (noteAuthError(uErr)) return { ok: false, error: cloudLastError, auth: true };
@@ -937,17 +1154,46 @@ window.Store = (function () {
     return { ok: true, action: 'none' };
   }
 
+  async function logoutCloudSessionForEmail(email) {
+    const { data, error } = await cloudClient.auth.getSession();
+    let signOutError = error;
+    const session = !error && data && data.session;
+    if (session && normalizedEmail(session.user && session.user.email) === email) {
+      const result = await cloudClient.auth.signOut({ scope: 'local' });
+      signOutError = result.error;
+      if (!signOutError) {
+        cloudUser = null;
+        activeUserId = null;
+        db = null;
+        dataError = null;
+      }
+    }
+    const localSessionUser = getUsers().find((user) => user.id === readSessionUserId());
+    if (localSessionUser && normalizedEmail(localSessionUser.email) === email) logout();
+    return signOutError || null;
+  }
+
   /* cloud auth — mirrors the local Auth API (async); current() stays sync via cache */
   const cloudAuth = {
     async signup(opts) {
       if (!cloudClient) await cloudInit();
+      if (!cloudClient) return { error: cloudLastError || 'Cloud account service is unavailable. Try again when you are online.' };
+      const email = normalizedEmail(opts.email);
+      const duplicateMessage = 'An account with this email already exists — try logging in.';
       const { data, error } = await cloudClient.auth.signUp({
-        email: String(opts.email || '').trim(), password: String(opts.password || ''),
+        email, password: String(opts.password || ''),
         options: { data: { full_name: String(opts.name || '').trim() }, emailRedirectTo: authPageUrl() }
       });
+      const duplicateError = error && /already (?:been )?registered|already exists|duplicate key|unique constraint/i.test(error.message);
+      const duplicateIdentity = data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+      if (duplicateError || duplicateIdentity) {
+        const signOutError = await logoutCloudSessionForEmail(email);
+        return { error: signOutError ? duplicateMessage + ' We could not log out this session: ' + signOutError.message : duplicateMessage };
+      }
       if (error) return { error: error.message };
       if (data.session && data.user) {
         cloudUser = mapUser(data.user); cloudStatus = 'on';
+        activateCloudWorkspace(data.user.id);
         await cloudSync();
         return { user: cloudUser };
       }
@@ -955,15 +1201,35 @@ window.Store = (function () {
     },
     async login(opts) {
       if (!cloudClient) await cloudInit();
-      const { data, error } = await cloudClient.auth.signInWithPassword({ email: String(opts.email || '').trim(), password: String(opts.password || '') });
+      if (!cloudClient) return { error: cloudLastError || 'Cloud account service is unavailable. Try again when you are online.' };
+      const { data, error } = await cloudClient.auth.signInWithPassword({ email: normalizedEmail(opts.email), password: String(opts.password || '') });
       if (error) return { error: error.message };
       cloudUser = mapUser(data.user); cloudStatus = 'on';
+      activateCloudWorkspace(data.user.id);
       await cloudSync();
       return { user: cloudUser };
     },
-    async logout() { try { await cloudClient.auth.signOut(); } catch (e) {} cloudUser = null; },
-    async signOutEverywhere() { await cloudClient.auth.signOut({ scope: 'global' }); cloudUser = null; },
+    async logout() {
+      if (cloudClient) {
+        const { error } = await cloudClient.auth.signOut();
+        if (error) throw error;
+      }
+      logout();
+      cloudUser = null;
+      activeUserId = null;
+      db = null; dataError = null;
+    },
+    async signOutEverywhere() {
+      if (!cloudClient) throw new Error('Cloud account service is unavailable.');
+      const { error } = await cloudClient.auth.signOut({ scope: 'global' });
+      if (error) throw error;
+      logout();
+      cloudUser = null; activeUserId = null; db = null; dataError = null;
+    },
     async changePassword(opts) {
+      if (!cloudClient) await cloudInit();
+      if (!cloudClient) return { error: cloudLastError || 'Cloud account service is unavailable. Try again when you are online.' };
+      if (!cloudUser) return { error: 'Not authenticated.' };
       const probe = await cloudClient.auth.signInWithPassword({ email: cloudUser.email, password: String(opts.currentPassword || '') });
       if (probe.error) return { error: 'Current password is incorrect.' };
       const { error } = await cloudClient.auth.updateUser({ password: String(opts.newPassword || '') });
@@ -972,9 +1238,23 @@ window.Store = (function () {
       return { user: cloudUser };
     },
     async sendReset(email) {
-      if (!cloudClient) await cloudInit();
-      const { error } = await cloudClient.auth.resetPasswordForEmail(String(email || '').trim(), { redirectTo: authPageUrl() });
-      return error ? { error: error.message } : { ok: true };
+      try {
+        const forced = typeof window !== 'undefined' && window.__SHERPAY_CLOUD_CLIENT__;
+        let recoveryClient = forced;
+        if (!recoveryClient) {
+          await loadSupabaseJs();
+          const cfg = db && db.settings && db.settings.cloud || {};
+          recoveryClient = window.supabase.createClient(
+            cfg.url || DEFAULT_CLOUD_URL,
+            cfg.anonKey || DEFAULT_CLOUD_ANON,
+            { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'sherpay-recovery' } }
+          );
+        }
+        const { error } = await recoveryClient.auth.resetPasswordForEmail(String(email || '').trim(), { redirectTo: authPageUrl() });
+        return error ? { error: error.message } : { ok: true };
+      } catch (e) {
+        return { error: (e && e.message) || 'Could not send a reset link right now.' };
+      }
     },
     current() { return cloudUser; }
   };
@@ -994,6 +1274,7 @@ window.Store = (function () {
   }
 
   function boot() {
+    activeUserId = readSessionUserId();
     if (!load()) {
       /* A fresh workspace starts empty. The sample dataset is opt-in: add ?demo to
          the URL hash (or set window.__SHERPAY_DEMO__ = true) and the tour arrives
@@ -1001,7 +1282,9 @@ window.Store = (function () {
       if (demoRequested()) demoData(); else blank();
     }
     runAutomations(true);
-    save();
+    // signed-out boot must not write anything: with no account there is no
+    // per-user key yet, and saving now would recreate the shared leak.
+    if (activeUserId || readSessionUserId()) save();
   }
   function resetDemo() { demoData(); }
 
@@ -1020,10 +1303,11 @@ window.Store = (function () {
           cloudAuth,
           __sha256: sha256
         },
-    cloud: { init: cloudInit, sync: cloudSync, enabled: cloudOn, hasConflict: hasConflictArchive, restoreConflict: cloudRestoreConflict, discardConflict: cloudDiscardConflict, downloadConflict: cloudExportConflict, lastSync: cloudLastSync, lastAction: () => cloudLastAction, lastError: () => cloudLastError, status: () => cloudStatus, onSessionExpired, isAuthError },
+    cloud: { init: cloudInit, sync: cloudSync, onSync, syncing: () => cloudSyncing, user: () => cloudUser, enabled: cloudOn, authEnabled: cloudAuthMode, hasConflict: hasConflictArchive, restoreConflict: cloudRestoreConflict, discardConflict: cloudDiscardConflict, downloadConflict: cloudExportConflict, lastSync: cloudLastSync, lastAction: () => cloudLastAction, lastError: () => cloudLastError, status: () => cloudStatus, onSessionExpired, isAuthError },
     CURRENCIES, CATEGORIES, PAY_METHODS, STATUS_LABEL, CLOUD_URL: DEFAULT_CLOUD_URL, CLOUD_ANON: DEFAULT_CLOUD_ANON,
     uid, num, pad, iso, todayISO, addDays, addMonths, daysBetween, fmtDate, fmtDateTime, monthKey, monthLabel, fmtMoney, esc,
     getClient, getInvoice, computeTotals, displayStatus, newInvoiceNumber, log,
+    inventoryItem, addInventoryItem, updateInventoryItem, deleteInventoryItem, deductInventoryFromInvoice,
     setupSteps, setupProgress, recentDrafts,
     runAutomations, recordPayment, markSent, markViewed, receiptNumber,
     createPaymentLink, syncPayments,

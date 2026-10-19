@@ -59,7 +59,7 @@ Single-file offline copy: https://sherpay.vercel.app/SherPay-mobile.html
 
 ## SherPay Pro upgrades (Mobile Money)
 
-The Pro upgrade is a one-time GHS 49 payment (12 months) from a Ghana mobile money
+The Pro upgrade is a one-time GHS 1 payment (12 months) from a Ghana mobile money
 wallet: MTN MoMo, Telecel Cash or AT Money. The customer types the number, gets a
 prompt on their handset, approves it — no PIN is ever collected by SherPay.
 

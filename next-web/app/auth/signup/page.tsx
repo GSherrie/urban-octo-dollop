@@ -24,12 +24,25 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim() } } });
+      const normalizedEmail = email.trim().toLowerCase();
+      const { data, error: err } = await supabase.auth.signUp({ email: normalizedEmail, password, options: { data: { full_name: name.trim() } } });
+      const duplicateIdentity = data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+      const duplicateError = err && /already (?:been )?registered|already exists|duplicate key|unique constraint/i.test(err.message);
+      if (duplicateError || duplicateIdentity) {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw new Error(`An account with this email already exists. We could not check the active session: ${sessionError.message}`);
+        if (session?.user.email?.trim().toLowerCase() === normalizedEmail) {
+          const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+          if (signOutError) throw new Error(`An account with this email already exists. We could not log out this session: ${signOutError.message}`);
+        }
+        setError("An account with this email already exists. Sign in instead.");
+        return;
+      }
       if (err) throw err;
       if (data.user) {
         const { data: { user: u } } = await supabase.auth.getUser();
         if (u?.email_confirmed_at) { router.push("/dashboard"); router.refresh(); }
-        else router.push(`/auth/verify?email=${encodeURIComponent(email.trim())}`);
+        else router.push(`/auth/verify?email=${encodeURIComponent(normalizedEmail)}`);
       }
     } catch (err) { setError(err instanceof Error ? err.message : "Could not create your account. Try again."); }
     finally { setLoading(false); }

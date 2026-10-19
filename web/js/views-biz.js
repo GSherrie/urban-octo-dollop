@@ -206,19 +206,8 @@
           st.cloud.anonKey = st.payments.supabaseAnonKey || st.cloud.anonKey;
           S.save(); UI.toast('Filled from checkout settings', 'green', 'copy'); UI.render();
         },
-        'cloud-sync': async () => {
-          if (!st.cloud.enabled) { UI.toast('Enable cloud sync first', 'amber', 'cloud'); return; }
-          if (!S.cloud) return;
-          UI.toast('Syncing…', 'blue', 'sync');
-          try {
-            const r = await S.cloud.sync();
-            /* "ok: false" is not "up to date" — saying so is the whole point of syncing */
-            if (r && r.ok === false) { UI.alertError('Cloud sync did not run', (r.error || 'The cloud account could not be reached') + '. Your work is saved on this device; nothing was uploaded.'); }
-            else { UI.toast(r.action === 'pushed' ? 'Workspace uploaded' : r.action === 'pulled' ? 'Latest version downloaded' : 'Already up to date', 'green', 'sync'); }
-            UI.render();
-          }
-          catch (e) { UI.toast('Sync failed: ' + (e.message || e), 'red', 'alert'); }
-        },
+        /* "Sync now" lives in ui.js (cloudSyncNow) as one shared handler —
+           the topbar status chip and this row both route through it. */
         'run-now': () => {
           // skip blank segments so "3, , -3" doesn't inject a stray 0 (due-date) reminder
           const vals = document.getElementById('set-rem').value.split(',').map((x) => x.trim()).filter((x) => x !== '').map(Number).filter((x) => isFinite(x));

@@ -105,6 +105,21 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .tb-account:hover{border-color:var(--blue); box-shadow:0 6px 16px -8px rgba(11,124,255,.45)}
 .tb-account:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
 .tb-account .avatar{width:32px; height:32px; border-radius:8px; font-size:12px}
+
+/* Cloud sync chip (topbar) — one glance tells you whether your work is
+   actually reaching the cloud. Click runs a sync (see ui.js cloudSyncNow). */
+.sync-chip{display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border-radius:99px; background:var(--field); border:1px solid var(--line); font-size:12px; font-weight:700; color:var(--muted); cursor:pointer; transition:border-color .15s, box-shadow .15s; flex:none; white-space:nowrap}
+.sync-chip:hover{border-color:var(--blue); box-shadow:0 6px 16px -8px rgba(11,124,255,.45)}
+.sync-chip:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+.sync-chip svg{width:14px; height:14px; flex:none}
+.sync-chip.ok{background:var(--green-soft); border-color:transparent; color:var(--on-green-soft)}
+.sync-chip.busy{background:var(--blue-soft); border-color:transparent; color:var(--on-blue-soft)}
+.sync-chip.busy svg{animation:sync-chip-spin 1.1s linear infinite}
+.sync-chip.err{background:var(--red-soft); border-color:transparent; color:var(--on-red-soft)}
+.sync-chip.idle{background:var(--amber-soft); border-color:transparent; color:var(--on-amber-soft)}
+.sync-chip.off{background:var(--seg-bg); color:var(--muted)}
+@keyframes sync-chip-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.sync-chip.busy svg{animation:none}}
 #view{padding:24px 28px 90px; max-width:1180px; width:100%; margin:0 auto}
 
 /* ---------- bottom nav (mobile) ---------- */

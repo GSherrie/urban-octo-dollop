@@ -14,11 +14,6 @@ for (const f of ['js/store.js', 'js/ui.js', 'js/views-auth.js', 'js/views-main.j
 }
 const S = w.Store, UI = w.UI;
 S.boot();
-// auth gate: create + sign in before rendering routes
-const su = S.Auth.signup({ name: 'QA User', email: 'qa@sherpay.app', password: 'password123' });
-if (!su.user) { console.log('FATAL signup for tests: ' + su.error); process.exit(1); }
-UI.start();
-
 const $ = (s) => w.document.querySelector(s);
 const $$ = (s) => Array.from(w.document.querySelectorAll(s));
 const click = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -27,6 +22,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const nav = (h) => { w.location.hash = h; UI.render(); };
 let pass = 0, fail = 0;
 const check = (name, cond) => { if (cond) { pass++; console.log('  ok  ' + name); } else { fail++; console.log('  FAIL ' + name); } };
+
+console.log('-- authentication required at entry');
+UI.start();
+check('signed-out startup shows login and signup options', !!$('#auth-card') && $('#auth-card').textContent.includes('Sign up') && !$('.sidebar'));
+nav('#/invoices/new');
+check('private route stays behind the auth screen', !!$('#auth-card') && !$('.sidebar'));
+// Authenticated interaction flows below use a real test account.
+const su = S.Auth.signup({ name: 'QA User', email: 'qa@sherpay.app', password: 'password123' });
+if (!su.user) { console.log('FATAL signup for tests: ' + su.error); process.exit(1); }
+UI.render(true);
 
 (async () => {
   console.log('-- fresh workspace: blank start + sample data loader');
@@ -130,10 +135,78 @@ const check = (name, cond) => { if (cond) { pass++; console.log('  ok  ' + name)
   click($('.uc-out'));
   await sleep(50); // signOut() awaits logout (async) before rendering the auth screen
   check('login screen shown after sign out', !!$('#auth-card') && $('#auth-card').innerHTML.includes('Welcome back'));
+  /* Password reset must route through the same cloud-aware picker as login —
+     it used to call S.Auth.sendReset (the local stub) directly, so even with
+     cloud sync on it always came back "needs cloud sync". The forced-client
+     seam (window.__SHERPAY_CLOUD_CLIENT__) stands in for Supabase here. */
+  let resetEmail = null;
+  w.__SHERPAY_CLOUD_CLIENT__ = {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      resetPasswordForEmail: async (email) => { resetEmail = email; return { error: null }; }
+    }
+  };
+  setInput($('#au-email'), 'qa@sherpay.app');
+  click($('[data-action="forgot"]'));
+  await sleep(80);
+  check('forgot password sends a reset email without workspace sync', resetEmail === 'qa@sherpay.app');
+  check('reset mail confirms in the auth hint', ($('#auth-err') || { textContent: '' }).textContent.includes('Reset link sent'));
+  delete w.__SHERPAY_CLOUD_CLIENT__;
   check('wrong password rejected', !!S.Auth.login({ email: 'qa@sherpay.app', password: 'nope' }).error);
   check('login restores session', !!S.Auth.login({ email: 'qa@sherpay.app', password: 'password123', remember: true }).user);
   UI.render(true);
   check('app shell back after login', !!$('.sidebar') && !!$('#view'));
+
+  console.log('-- sync status chip: live indicator in the topbar');
+  /* The forgot-password step deleted the seam; re-arm it so a click on the
+     chip drives a full init+sync against a fake that only signs in while a
+     session exists — exactly what a real client does. */
+  let syncPushes = 0;
+  w.__SHERPAY_CLOUD_CLIENT__ = {
+    auth: {
+      getSession: async () => {
+        const u = S.Auth.current();
+        return { data: { session: u ? { user: { id: u.id, email: u.email, user_metadata: { name: u.name } } } : null }, error: null };
+      },
+      getUser: async () => {
+        const u = S.Auth.current();
+        return { data: { user: u ? { id: u.id, email: u.email } : null }, error: null };
+      },
+      resetPasswordForEmail: async (email) => ({ error: null })
+    },
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      upsert: async () => { syncPushes++; return { error: null }; }
+    })
+  };
+  const chip0 = $('#sync-chip');
+  check('sync status chip sits in the topbar', !!chip0 && (chip0.textContent || '').trim().length > 0);
+  /* Before any sync has run the indicator must be honest: in this jsdom run
+     the boot-time init hangs on the CDN script (jsdom never loads external
+     scripts), so the chip reads "Connecting…" — a true in-flight state. It
+     must never claim a sync that didn't happen. */
+  const chip0Label = ((chip0 || {}).textContent || '').trim();
+  check('before any sync the chip never claims to be synced (shows "' + chip0Label + '")', !!chip0 && chip0Label.length > 0 && !/Synced/.test(chip0Label));
+  const modalBefore = w.document.getElementById('modal-root').textContent;
+  let chipUpdates = 0;
+  const unsubscribe = S.cloud.onSync(() => chipUpdates++);
+  click($('#sync-chip'));
+  await sleep(250);
+  const chip1 = $('#sync-chip');
+  check('clicking the chip uploads the workspace', syncPushes > 0 && !!chip1 && /Synced/.test(chip1.textContent));
+  check('the chip says how fresh the last sync is', !!chip1 && /Synced (just now|\d+m ago)/.test(chip1.textContent));
+  check('each sync announces itself so the chip updates live', chipUpdates >= 2);
+  check('a successful sync raises no error dialog', w.document.getElementById('modal-root').textContent === modalBefore);
+  unsubscribe();
+  /* a failing sync must be visible on the chip, not swallowed */
+  w.__SHERPAY_CLOUD_CLIENT__.from = () => ({
+    select: () => ({ eq: () => ({ maybeSingle: async () => { throw new Error('network down'); } }) }),
+    upsert: async () => ({ error: null })
+  });
+  click($('#sync-chip'));
+  await sleep(200);
+  check('a failed sync flips the chip to an error state', !!$('#sync-chip') && /Sync failed/.test($('#sync-chip').textContent));
+  check('the failure never becomes an error dialog mid-work', w.document.getElementById('modal-root').textContent === modalBefore);
 
   await sleep(300);
   if (errors.length) { fail++; console.log('\nRUNTIME ERRORS:'); errors.forEach((e) => console.log('  ' + e)); }

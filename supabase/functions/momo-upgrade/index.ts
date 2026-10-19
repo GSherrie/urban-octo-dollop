@@ -239,6 +239,13 @@ async function handleInit(admin: ReturnType<typeof createClient>, body: any, ori
   if (!issued.ok) return json({ ok: false, error: issued.error, field: issued.field }, 400);
   if (!issued.row) return json({ ok: false, error: 'Could not create a payment request.' }, 400);
   const issuedRow = issued.row;
+
+  /* Fail BEFORE a row is written when the server itself is misconfigured:
+     a missing key would only surface at Paystack anyway, and the resulting
+     failed row is noise the customer can do nothing about. */
+  if (!Deno.env.get('PAYSTACK_SECRET_KEY')) {
+    return json({ ok: false, error: 'Payments are not configured on this server yet (PAYSTACK_SECRET_KEY is missing).' }, 503);
+  }
   const account = await findAccountByEmail(admin, issuedRow.email);
 
   /* Insert the order. A reference collision is essentially impossible, but it
@@ -271,7 +278,10 @@ async function handleInit(admin: ReturnType<typeof createClient>, body: any, ori
   const init: any = await paystack('/transaction/initialize', paystackInitBody(row, { callbackUrl: callback }));
   const tx = init?.data || {};
   if (!init?.status || !tx.authorization_url) {
-    const why = init?.message || 'the payment provider did not accept the request';
+    /* paystack() reports failures under `error` (network/parse problems) or
+       `message` (Paystack's own refusal) — read both so the customer never
+       sees a generic message when the real reason is known. */
+    const why = init?.error || init?.message || init?.raw || 'the payment provider did not accept the request';
     await admin.from('payments').update({ status: 'failed', last_error: why, updated_at: nowIso() }).eq('reference', row.ref);
     return json({ ok: false, error: 'The payment provider refused the request: ' + why, ref: row.ref }, 502);
   }
@@ -280,39 +290,19 @@ async function handleInit(admin: ReturnType<typeof createClient>, body: any, ori
     .eq('reference', row.ref);
   if (pendingError) throw new Error('Paystack initialized the transaction, but its checkout could not be saved. Keep reference ' + row.ref + '.');
 
-  /* Push the charge into the wallet the customer just typed: identify their
-     mobile money identity, then authorize the transaction against it. If either
-     step is refused (some wallets need the hosted page or an OTP), the order
-     does not fail — we hand back the hosted link, same wallet, one tap deeper. */
-  const prov = providerById(row.momo_provider);
-  const code = tx.authorization_code || tx.access_code || '';
-  let pushError = '';
-  if (prov && code) {
-    const ident: any = await paystack('/transaction/identify', {
-      email: row.email,
-      authorization_code: code,
-      identity: { type: 'mobile_money', mobile_money: { provider: prov.paystack, country: 'gh', mobile_number: row.momo_number } },
-    });
-    if (ident?.status && ident?.data?.identity) {
-      const authed: any = await paystack('/transaction/customer-authorize', {
-        email: row.email, authorization_code: code, auth_method: 'mobile_money',
-      });
-      if (authed?.status) {
-        const { error } = await admin.from('payments')
-          .update({ status: 'awaiting_approval', attempts: 1, last_error: null, updated_at: nowIso() })
-          .eq('reference', row.ref);
-        if (error) throw new Error('The Mobile Money prompt started, but its status could not be saved. Keep reference ' + row.ref + '.');
-        row = { ...row, status: 'awaiting_approval', last_error: null };
-      } else pushError = authed?.message || 'the wallet did not accept the prompt';
-    } else pushError = ident?.message || 'that number could not be matched to a wallet';
-  } else pushError = 'mobile money prompt could not be started';
+  /* Mobile money completes on Paystack's hosted checkout page — the customer
+     taps Pay, Paystack fires `charge.success`, this function verifies against
+     Paystack and settles the order. A charge-through-the-wallet (`identify` /
+     `customer-authorize`) is a card-3DS step that never fires for a wallet
+     purchase, so that path is removed. `transaction/initialize` returns the
+     hosted URL as the fallback for wallets or accounts that cannot be matched. */
+  const { error: pendingError } = await admin.from('payments')
+    .update({ status: 'pending', checkout_url: tx.authorization_url,
+      provider_tx_id: String(tx.id || ''), updated_at: nowIso() })
+    .eq('reference', row.ref);
+  if (pendingError) throw new Error('Paystack initialized the transaction, but its checkout could not be saved. Keep reference ' + row.ref + '.');
 
-  if (pushError) {
-    const { error } = await admin.from('payments').update({ status: 'pending', last_error: pushError, updated_at: nowIso() }).eq('reference', row.ref);
-    if (error) throw new Error('Could not save the Mobile Money fallback status. Keep reference ' + row.ref + '.');
-    row = { ...row, status: 'pending', last_error: pushError };
-  }
-  return json({ ok: true, hint: issued.hint || '', order: publicOrder({ ...row, checkout_url: tx.authorization_url }) });
+  return json({ ok: true, hint: '', order: publicOrder({ ...row, status: 'pending', checkout_url: tx.authorization_url }) });
 }
 
 /* ---------------- POST { action:'status', ref } ---------------- */

@@ -5,3 +5,4 @@ node_modules/
 *.local
 .env.payments
 /dist/
+supabase/.temp/

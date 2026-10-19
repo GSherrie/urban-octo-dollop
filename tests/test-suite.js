@@ -13,7 +13,7 @@ const w = dom.window;
 w.URL.createObjectURL = () => 'blob:stub';
 w.URL.revokeObjectURL = () => {};
 w.print = () => {};
-  for (const f of ['js/store.js', 'js/ui.js', 'js/views-auth.js', 'js/views-main.js', 'js/views-editor.js', 'js/views-ops.js', 'js/views-biz.js', 'js/views-account.js']) {
+  for (const f of ['js/store.js', 'js/ui.js', 'js/views-auth.js', 'js/views-main.js', 'js/views-editor.js', 'js/views-ops.js', 'js/views-biz.js', 'js/views-inventory.js', 'js/views-account.js']) {
   w.eval(fs.readFileSync(WEB + '/' + f, 'utf8'));
 }
 const S = w.Store, UI = w.UI;
@@ -42,6 +42,15 @@ const section = (n) => console.log('— ' + n);
   click($('[data-action="load-demo"]'));
   click($('#cf-yes'));
   check('sample data loads on demand', S.db.invoices.length > 0 && S.db.clients.length > 0);
+
+  /* The plan is an account fact, not workspace data: a paid Pro who explores
+     the sample set must still be Pro afterwards (demoData carries it over). */
+  const planBefore = { tier: 'pro', months: 12, paid_at: S.todayISO(), ref: 'SHP-UP-000001-KEEPPLAN' };
+  S.db.settings.plan = planBefore;
+  S.resetDemo();
+  check('loading the sample set keeps the paid plan', S.upgrades.isPro() === true && S.db.settings.plan === planBefore);
+  S.db.settings.plan = null;
+  S.save();
 
   section('dashboard');
   nav('#/dashboard');
@@ -85,6 +94,50 @@ const section = (n) => console.log('— ' + n);
   check('sequential number assigned', created.number === S.db.settings.prefix + '-' + new Date().getFullYear() + '-' + String(seqBefore).padStart(3, '0'));
   check('seq incremented', S.db.settings.seq === seqBefore + 1);
   check('draft status', created.status === 'draft');
+
+  section('editor: two-way client save (new client while invoicing)');
+  nav('#/invoices/new');
+  check('client dropdown offers + New client', !!$('#ed-client option[value="__new"]'));
+  $('#ed-client').value = '__new';
+  $('#ed-client').dispatchEvent(new w.Event('change', { bubbles: true }));
+  check('new-client fields appear', !$('#ed-newclient').hasAttribute('hidden'));
+  setInput($('#ed-new-name'), 'QA Walk-in Buyer');
+  setInput($('#ed-new-email'), 'qawalkin@sherpay.test');
+  setInput($('#ed-new-phone'), '+233 24 000 0092');
+  setInput($('#ed-items tr:first-child input[data-f="desc"]'), 'QA walk-in service');
+  setInput($('#ed-items tr:first-child input[data-f="price"]'), '250');
+  click($('#tb-actions [data-action="save-send"]'));
+  await sleep(50);
+  const twowayInv = S.db.invoices[0];
+  const twowayClient = S.getClient(twowayInv.clientId);
+  check('inline client auto-saved on send', !!twowayClient && twowayClient.name === 'QA Walk-in Buyer');
+  check('inline client contact kept', twowayClient.email === 'qawalkin@sherpay.test' && twowayClient.phone === '+233 24 000 0092');
+  check('two-way invoice sent (sent→viewed once opened)', twowayInv.status === 'sent' || twowayInv.status === 'viewed');
+  check('no scratch field leaks onto invoice', !('newClient' in twowayInv));
+  nav('#/clients');
+  check('two-way client visible in CRM', $('#view').textContent.includes('QA Walk-in Buyer'));
+  // same email must reuse, not duplicate
+  const clientCount = S.db.clients.length;
+  nav('#/invoices/new');
+  $('#ed-client').value = '__new';
+  $('#ed-client').dispatchEvent(new w.Event('change', { bubbles: true }));
+  setInput($('#ed-new-name'), 'QA Walk-in Renamed');
+  setInput($('#ed-new-email'), 'qawalkin@sherpay.test');
+  setInput($('#ed-items tr:first-child input[data-f="desc"]'), 'QA follow-up');
+  setInput($('#ed-items tr:first-child input[data-f="price"]'), '50');
+  click($('#tb-actions [data-action="save-send"]'));
+  await sleep(50);
+  check('repeat email reuses saved client (no duplicate)', S.db.clients.length === clientCount);
+  // nameless inline client must block save
+  nav('#/invoices/new');
+  $('#ed-client').value = '__new';
+  $('#ed-client').dispatchEvent(new w.Event('change', { bubbles: true }));
+  const invCountBeforeNameCheck = S.db.invoices.length;
+  setInput($('#ed-items tr:first-child input[data-f="desc"]'), 'QA nameless');
+  setInput($('#ed-items tr:first-child input[data-f="price"]'), '10');
+  click($('#tb-actions [data-action="save-send"]'));
+  await sleep(50);
+  check('nameless new client blocks save', S.db.invoices.length === invCountBeforeNameCheck);
 
   section('send + viewed tracking + partial + full pay + receipt');
   nav('#/invoices');
@@ -264,6 +317,7 @@ const section = (n) => console.log('— ' + n);
   // logout navigates away
   click($('[data-action="logout"]'));
   check('logout sets auth hash', w.location.hash.startsWith('#/auth'));
+  check('cloud account mode remains selected after logout', S.cloud.authEnabled());
   // restore session for the auth section below
   S.Auth.login({ email: 'qa@sherpay.app', password: 'password123', remember: true });
   UI.render(true);
@@ -276,17 +330,108 @@ const section = (n) => console.log('— ' + n);
   check('money format GHS', S.fmtMoney(1234.5, 'GHS').includes('1,234.5'));
   check('backup json serializable', JSON.parse(JSON.stringify(S.db)).invoices.length === S.db.invoices.length);
 
+  section('inventory (Pro feature)');
+
+  // The suite boots with the sample dataset loaded ("fresh start" clicks
+  // Load demo), so every count here is relative to what already exists.
+  const invBase = S.db.inventory.length;
+  const inv1 = S.addInventoryItem({ sku: 'AA-100', name: 'AA Alkaline Batteries', qty: 12, unit: 'box', cost: 18.5, note: '' });
+  check('inventory item added with fields', inv1 && inv1.id && inv1.qty === 12 && S.db.inventory.length === invBase + 1);
+  check('inventory item persisted', S.inventoryItem(inv1.id) && S.inventoryItem(inv1.id).name === 'AA Alkaline Batteries');
+  const inv2 = S.addInventoryItem({ sku: 'LED-200', name: 'LED Downlight', qty: 5, unit: 'box', cost: 42, note: '' });
+  check('second item added', S.db.inventory.length === invBase + 2);
+  const a1 = S.updateInventoryItem(inv1.id, { qty: 7 });
+  check('stock update applies', a1 && a1.qty === 7);
+
+  // Deduct stock when an invoice bills an inventory line.
+  const charged = { id: 'inv-charged', number: 'INV-2026-010', clientId: 'c1', issueDate: S.todayISO(), dueDate: S.addDays(S.todayISO(), 30), currency: 'GHS', items: [], taxMode: 'percent', taxValue: 15, discountMode: 'none', discountValue: 0, status: 'draft', payments: [] };
+  charged.items.push({ desc: 'AA Alkaline Batteries', qty: 2, price: 18.5, inventory_id: inv1.id });
+  S.deductInventoryFromInvoice(charged);
+  check('invoice with inventory line deducts stock', S.inventoryItem(inv1.id) && S.inventoryItem(inv1.id).qty === 5);
+
+  // Overselling is capped at on hand, never negative.
+  charged.items.push({ desc: 'LED Downlight', qty: 999, price: 42, inventory_id: inv2.id });
+  S.deductInventoryFromInvoice(charged);
+  check('oversell capped at on hand', S.inventoryItem(inv2.id) && S.inventoryItem(inv2.id).qty === 0);
+  // A re-save claims only the difference — stock is never drained twice.
+  S.deductInventoryFromInvoice(charged);
+  check('repeat deduct is a no-op', S.inventoryItem(inv1.id).qty === 5);
+
+  // A line without inventory_id is ignored for stock.
+  const plain = { desc: 'Consulting', qty: 1, price: 500, inventory_id: null };
+  const inv2b = { id: 'inv-plain', number: 'INV-2026-011', clientId: 'c1', issueDate: S.todayISO(), dueDate: S.addDays(S.todayISO(), 30), currency: 'GHS', items: [plain], taxMode: 'percent', taxValue: 15, discountMode: 'none', discountValue: 0, status: 'draft', payments: [] };
+  S.deductInventoryFromInvoice(inv2b);
+  check('plain line does not touch stock', S.inventoryItem(inv1.id) && S.inventoryItem(inv1.id).qty === 5);
+
+  // Sending is the billing moment: stock leaves the shelf once, on first send.
+  const billed = { id: S.uid(), number: S.newInvoiceNumber(S.todayISO()), clientId: 'c1', issueDate: S.todayISO(), dueDate: S.addDays(S.todayISO(), 30), currency: 'GHS', items: [{ desc: 'AA Alkaline Batteries', qty: 1, price: 18.5, inventory_id: inv1.id }], taxMode: 'percent', taxValue: 15, discountMode: 'none', discountValue: 0, status: 'draft', payments: [] };
+  S.db.invoices.push(billed);
+  S.markSent(billed.id, 'Email');
+  check('sending an invoice auto-deducts stock', S.inventoryItem(inv1.id).qty === 4);
+  S.markSent(billed.id, 'Email');
+  check('resend does not double-deduct', S.inventoryItem(inv1.id).qty === 4);
+
+  const a2 = S.deleteInventoryItem(inv2.id);
+  check('delete removes row', a2 && S.db.inventory.length === invBase + 1);
+
+  check('inventory view registered', !!UI.VIEWS.inventory);
+
   section('auth: session, logout, login');
   check('session active', !!S.Auth.current());
-  const dup = S.Auth.signup({ name: 'Dup', email: 'qa@sherpay.app', password: 'password123' });
+  const dup = S.Auth.signup({ name: 'Dup', email: ' QA@SherPay.app ', password: 'password123' });
   check('duplicate email blocked', !!dup.error);
+  check('duplicate signup logs out matching session', !S.Auth.current() && S.db === null);
   S.Auth.logout();
   UI.render(true);
   check('auth screen after logout', !!$('#auth-card') && $('#auth-card').innerHTML.includes('Welcome back'));
+  check('logout clears in-memory workspace', S.db === null);
   check('wrong password rejected', !!S.Auth.login({ email: 'qa@sherpay.app', password: 'nope' }).error);
   check('login succeeds', !!S.Auth.login({ email: 'qa@sherpay.app', password: 'password123', remember: true }).user);
   UI.render(true);
   check('app renders after login', !!$('#view') && $('#view').innerHTML.length > 40);
+
+  section('auth: per-user workspace isolation');
+  const qaId = S.Auth.current().id;
+  const qaClientsBefore = S.db.clients.length;
+  S.db.clients.push({ id: 'c-qa-private', name: 'QA Private Client' });
+  S.save();
+  check('workspace saves to per-user key', !!w.localStorage.getItem('sherpay_db_v1:' + qaId));
+  S.Auth.logout();
+  check('logout clears in-memory workspace (second user)', S.db === null);
+  const second = S.Auth.signup({ name: 'Second User', email: 'second@sherpay.app', password: 'password123' });
+  check('second user signs up', !!second.user);
+  UI.render(true);
+  check('second user starts blank (no leak)', S.db.clients.length === 0 && S.db.invoices.length === 0 && S.db.expenses.length === 0);
+  check('legacy shared key not recreated', !w.localStorage.getItem('sherpay_db_v1'));
+  check('per-user caches stay separate', !!w.localStorage.getItem('sherpay_db_v1:' + qaId) && !!w.localStorage.getItem('sherpay_db_v1:' + second.user.id));
+  S.db.clients.push({ id: 'c-second-private', name: 'Second Private Client' });
+  S.save();
+  S.Auth.logout();
+  check('first user sees only their data after switch-back', !!S.Auth.login({ email: 'qa@sherpay.app', password: 'password123' }).user && S.db.clients.length === qaClientsBefore + 1 && S.db.clients.some((c) => c.name === 'QA Private Client') && !S.db.clients.some((c) => c.name === 'Second Private Client'));
+  S.Auth.logout();
+  check('second user sees only their data after switch-back', !!S.Auth.login({ email: 'second@sherpay.app', password: 'password123' }).user && S.db.clients.length === 1 && S.db.clients[0].name === 'Second Private Client');
+  S.Auth.logout();
+  S.Auth.login({ email: 'qa@sherpay.app', password: 'password123', remember: true });
+  UI.render(true);
+
+  section('auth: cloud duplicate registration');
+  let sessionReadCount = 0, duplicateSignOutScope = null;
+  w.__SHERPAY_CLOUD_CLIENT__ = {
+    auth: {
+      getSession: async () => {
+        sessionReadCount++;
+        return { data: { session: sessionReadCount === 1 ? null : { user: { id: 'cloud-qa', email: 'qa@sherpay.app' } } }, error: null };
+      },
+      signUp: async () => ({ data: { user: { id: 'cloud-qa', email: 'qa@sherpay.app', identities: [] }, session: null }, error: null }),
+      signOut: async (opts) => { duplicateSignOutScope = opts.scope; return { error: null }; }
+    }
+  };
+  await S.cloud.init();
+  const cloudDup = await S.Auth.cloudAuth.signup({ name: 'Duplicate QA', email: ' QA@SherPay.app ', password: 'password123' });
+  check('cloud duplicate email rejected', !!cloudDup.error);
+  check('matching cloud session logged out', duplicateSignOutScope === 'local' && !S.Auth.current());
+  S.Auth.login({ email: 'qa@sherpay.app', password: 'password123', remember: true });
+  UI.render(true);
 
   section('runtime errors');
   check('no uncaught errors', errors.length === 0);

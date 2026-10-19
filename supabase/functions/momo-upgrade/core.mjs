@@ -24,7 +24,7 @@ export const CURRENCY = 'GHS';
    Mirrored in web/js/store.js (PLANS) because the browser cannot import from
    supabase/functions; tests/test-momo-upgrade.js fails if the two drift. */
 export const PLAN_PRICES = {
-  pro: { yearly: 49, months: 12, currency: CURRENCY }
+  pro: { yearly: 1, months: 12, currency: CURRENCY }
 };
 
 export const BILLINGS = ['annual'];
@@ -86,7 +86,7 @@ export function isReference(value) {
    Accepts 0 24 555 0110 / 0245550110 / +233 24 555 0110 / 233245550110 and
    rejects anything that could not be a Ghanaian wallet. */
 export function normalizeMomoNumber(input, providerId) {
-  const raw = String(input == null ? '' : input).replace(/[()\s.\-]/g, '');
+  const raw = String(input == null ? '' : input).replace(/[()\s.•\-]/g, '');
   if (!raw) return { ok: false, error: 'Enter the mobile money number to pay from.' };
   if (/[^\d+]/.test(raw)) return { ok: false, error: 'A mobile money number contains digits only.' };
 
@@ -159,7 +159,6 @@ export function nextStatus(current, observed, now, expiresAt) {
   if (obs === 'failed') return 'failed';
   const expires = expiresAt || (current && typeof current === 'object' ? current.expires_at : '');
   if (expires && at.getTime() > new Date(expires).getTime()) return 'expired';
-  if (obs === 'awaiting' || obs === 'pending') return 'awaiting_approval';
   return ACTIVE.indexOf(current) > -1 ? current : 'created';
 }
 
