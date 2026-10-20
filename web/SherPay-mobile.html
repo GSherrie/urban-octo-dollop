@@ -2260,7 +2260,14 @@ window.UI = (function () {
        lazily, so after a reload sync silently never resumed — and the status
        chip must reflect reality from the very first frame. */
     if (S.cloud && S.cloud.enabled && S.cloud.enabled() && S.cloud.init) {
-      Promise.resolve(S.cloud.init()).catch(function () {});
+      Promise.resolve(S.cloud.init()).catch(function () {}).then(function () {
+        if (!authed() || !S.upgrades || !S.upgrades.sync) return;
+        return S.upgrades.sync().then(function (changed) {
+          if (!changed) return;
+          render(true);
+          toast('SherPay Pro is active on this account', 'green', 'star');
+        }).catch(function () {});
+      });
     }
     /* Live chip updates: a background push that finishes while you are typing
        flips the label without a re-render. If a cloud session restores while
@@ -4598,7 +4605,7 @@ window.UI = (function () {
       html:
         '<div class="acct-head">' + UI.avatar(name) +
           '<div class="acct-meta"><b>' + esc(name) + '</b><span>' + esc(email) + '</span></div>' +
-          '<span class="badge plan">' + (p.phone ? 'Verified' : 'Standard') + '</span>' +
+          '<span class="badge plan">' + (S.upgrades.isPro() ? 'SherPay Pro' : 'Standard') + '</span>' +
         '</div>' +
         '<div class="card card-b">' +
           '<div class="row small mb"><span class="muted" style="flex:1">Full name</span><b>' + esc(name) + '</b></div>' +
@@ -5228,11 +5235,6 @@ window.addEventListener('DOMContentLoaded', function () {
     Store.syncPayments().then(function (n) { if (n) UI.toast(n + ' payment' + (n === 1 ? '' : 's') + ' received online', 'green', 'wallet'); }).catch(function () {});
     /* and any SherPay Pro upgrade paid by mobile money whose reference has
        cleared since this device last looked */
-    Store.upgrades.sync().then(function (on) {
-      if (!on) return;
-      UI.render(true);
-      UI.toast('SherPay Pro is active on this account', 'green', 'star');
-    }).catch(function () {});
     /* keep the workspace current: re-sync whenever the app returns to the foreground */
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible' && Store.cloud && Store.cloud.enabled()) {

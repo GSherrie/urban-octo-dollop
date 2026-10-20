@@ -72,11 +72,6 @@
     Store.syncPayments().then(function (n) { if (n) UI.toast(n + ' payment' + (n === 1 ? '' : 's') + ' received online', 'green', 'wallet'); }).catch(function () {});
     /* and any SherPay Pro upgrade paid by mobile money whose reference has
        cleared since this device last looked */
-    Store.upgrades.sync().then(function (on) {
-      if (!on) return;
-      UI.render(true);
-      UI.toast('SherPay Pro is active on this account', 'green', 'star');
-    }).catch(function () {});
     /* keep the workspace current: re-sync whenever the app returns to the foreground */
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible' && Store.cloud && Store.cloud.enabled()) {

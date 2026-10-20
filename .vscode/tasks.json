@@ -46,9 +46,23 @@
       "problemMatcher": []
     },
     {
+      "label": "Copy Vercel link to repo root (one-time)",
+      "type": "shell",
+      "command": "mkdir -p .vercel && cp web/.vercel/project.json .vercel/project.json && echo 'root .vercel/project.json ready'",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "Deploy to Vercel (update live app)",
       "type": "shell",
-      "command": "npx vercel deploy --prod",
+      "command": "mkdir -p .vercel && cp web/.vercel/project.json .vercel/project.json && npx vercel deploy --prod --yes",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build + deploy to Vercel (update live app)",
+      "type": "shell",
+      "command": "node scripts/build-mobile.js && cd .. && mkdir -p .vercel && cp web/.vercel/project.json .vercel/project.json && npx vercel deploy --prod --yes",
       "options": { "cwd": "${workspaceFolder}/web" },
       "problemMatcher": []
     }

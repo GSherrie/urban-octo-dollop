@@ -58,7 +58,7 @@
       html:
         '<div class="acct-head">' + UI.avatar(name) +
           '<div class="acct-meta"><b>' + esc(name) + '</b><span>' + esc(email) + '</span></div>' +
-          '<span class="badge plan">' + (p.phone ? 'Verified' : 'Standard') + '</span>' +
+          '<span class="badge plan">' + (S.upgrades.isPro() ? 'SherPay Pro' : 'Standard') + '</span>' +
         '</div>' +
         '<div class="card card-b">' +
           '<div class="row small mb"><span class="muted" style="flex:1">Full name</span><b>' + esc(name) + '</b></div>' +

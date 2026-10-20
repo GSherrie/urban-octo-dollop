@@ -174,6 +174,12 @@ function stubFetch(sandbox) {
   check('the sheet closes and the app says Pro is active',
     sheet().textContent.indexOf('Payment started on this device') === -1 &&
     w.document.querySelector('.pro-card').textContent.indexOf('Active') > -1);
+  w.location.hash = '#/account';
+  w.UI.render(true);
+  check('the account profile badge reflects the paid Pro plan',
+    w.document.querySelector('.badge.plan') && w.document.querySelector('.badge.plan').textContent === 'SherPay Pro');
+  w.location.hash = '#/dashboard';
+  w.UI.render(true);
   click(w.document.querySelector('[data-action="pro"]'));
   await sleep(40);
   check('a Pro account is not sold Pro again',

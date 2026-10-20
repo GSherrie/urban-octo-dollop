@@ -1,0 +1,38 @@
+# Vercel upload ignore rules (repo root).
+#
+# The Vercel project's Root Directory is "web", so Vercel serves whatever is
+# inside web/ — this file only keeps the *upload* small and prevents
+# unrelated folders from being shipped.
+#
+# NOTE: the CLI deploys from the repo root (not from web/) precisely because
+# Root Directory=web means Vercel expects to find a web/ folder in the
+# uploaded tree. Deploying from inside web/ fails with
+# "The specified Root Directory \"web\" does not exist".
+
+# Build/tooling folders that are not part of the deployed site
+# (root-anchored "/..." so they cannot match web/scripts, web/js, etc.)
+/next-web/
+/native/
+/tests/
+/builds/
+/dist/
+/supabase/
+
+# Keep web/scripts (build tooling + env handling) out of the public site too.
+# web/.vercelignore already does this for the web/ root; repeat it here so the
+# rule holds regardless of which .vercelignore Vercel applies.
+/web/scripts/
+/web/README.md
+/web/.env*
+
+# Dependencies
+node_modules/
+
+# Secrets and local state
+.env.payments
+.env*
+!.env.example
+.vercel/
+
+# OS cruft
+.DS_Store

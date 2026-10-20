@@ -21,13 +21,24 @@ Prerequisite: Node.js installed on your Mac (https://nodejs.org — LTS). The li
 
 **Route 1 — Vercel CLI (simplest start, no GitHub needed)**
 1. One time: run task **`Link Vercel project (one-time)`** (or `cd web && npx vercel login && npx vercel link`) → pick your account → pick project **sherpay**.
-2. Every update: run task **`Deploy to Vercel (update live app)`** (or `cd web && npx vercel deploy --prod`). Live in ~15 seconds.
+2. Every update: run task **`Deploy to Vercel (update live app)`** (or `npx vercel deploy --prod --yes` **from the repo root**). Live in ~15 seconds.
+
+> **Why the repo root?** The project's **Root Directory is `web`**, so Vercel serves whatever is inside `web/`.
+> The CLI uploads the *contents* of the directory you run it in, so running it from `web/` uploads the site
+> files at the top level and Vercel then looks for `web/web` — it fails with
+> `The specified Root Directory "web" does not exist`. Deploying from the repo root uploads a tree that
+> *contains* `web/`, which is what Vercel expects. The task copies `web/.vercel/project.json` to
+> `.vercel/project.json` at the root first so the CLI targets the existing project.
 
 **Route 2 — GitHub auto-deploy (recommended long-term)**
 1. Push the project to GitHub (see START-HERE ▸ "Put it on GitHub").
 2. On https://vercel.com: open project **sherpay** → **Settings ▸ Git ▸ Connect Git Repository** → choose your `sherpay` repo.
 3. **Settings ▸ General ▸ Root Directory** → set to `web` (the site lives in that subfolder).
 4. From now on, every `git push` (or VS Code ▸ Source Control ▸ Commit + Sync) **automatically redeploys the live app**. Pull requests/branches get free preview URLs.
+
+> Git auto-deploys build from `web/` only, so anything that must be reachable at the site root has to live
+> **inside `web/`**. That is why the single-file build is written to `web/SherPay-mobile.html` as well as the
+> project root — otherwise `https://sherpay.vercel.app/SherPay-mobile.html` 404s on a git deploy.
 
 **After any deploy — cache-bust for phones:** if you changed HTML/CSS/JS, bump the version so installed PWAs pick it up immediately: in `web/index.html` change every `?v=4` → `?v=5`, and in `web/sw.js` change `CACHE = 'sherpay-v4'` → `'sherpay-v5'` and the `?v=4` entries in `CORE`. (Deploy again after bumping.)
 
@@ -40,9 +51,19 @@ Refresh**, which unregisters the worker, clears its caches and reloads (localSto
 The build tag is read from the `?v=` above (or the `sherpay-build` meta in the single-file build), so it
 follows the same bump — no second place to edit.
 
-**Deploying the offline single-file copy:** `node scripts/sync-www.js ../dist && cd ../dist && vercel deploy --prod --yes`
-ships `web/` plus `SherPay-mobile.html`, which the docs promise at `https://sherpay.vercel.app/SherPay-mobile.html`.
-Copy `web/.vercel/` into the target dir first (or link it) so the CLI deploys to the existing project.
+**Deploying the offline single-file copy:** the single-file build already ships as
+`https://sherpay.vercel.app/SherPay-mobile.html` — `web/scripts/build-mobile.js` writes it to both the project
+root and `web/`, and both deploy routes include it. To publish a fresh copy, rebuild and deploy:
+
+```
+node web/scripts/build-mobile.js && npx vercel deploy --prod --yes
+```
+
+(`build-mobile.js` writes the file to both the project root and `web/`, so one run covers both.)
+
+**Troubleshooting a failed CLI deploy:** a failed deploy never takes over the live site — Vercel keeps the last
+**READY** deployment on the production alias. Check which one is live with `npx vercel ls sherpay` and
+`npx vercel inspect <deployment-url>`.
 
 ## Live-reload details
 `web/scripts/dev-server.js` is dependency-free: static server + SSE broadcaster. It injects a tiny

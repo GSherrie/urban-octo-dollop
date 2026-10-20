@@ -169,7 +169,14 @@ window.UI = (function () {
        lazily, so after a reload sync silently never resumed — and the status
        chip must reflect reality from the very first frame. */
     if (S.cloud && S.cloud.enabled && S.cloud.enabled() && S.cloud.init) {
-      Promise.resolve(S.cloud.init()).catch(function () {});
+      Promise.resolve(S.cloud.init()).catch(function () {}).then(function () {
+        if (!authed() || !S.upgrades || !S.upgrades.sync) return;
+        return S.upgrades.sync().then(function (changed) {
+          if (!changed) return;
+          render(true);
+          toast('SherPay Pro is active on this account', 'green', 'star');
+        }).catch(function () {});
+      });
     }
     /* Live chip updates: a background push that finishes while you are typing
        flips the label without a re-render. If a cloud session restores while
