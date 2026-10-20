@@ -38,3 +38,8 @@ html = html.replace('<meta charset="UTF-8">', '<meta charset="UTF-8">\n<meta nam
 const out = path.join(root, '..', 'SherPay-mobile.html');
 fs.writeFileSync(out, html);
 console.log('wrote', out, (fs.statSync(out).size / 1024).toFixed(0) + ' KB');
+// keep a copy inside web/ too: Vercel serves git deploys from web/ (rootDirectory),
+// and the docs promise the file at https://sherpay.vercel.app/SherPay-mobile.html
+const webOut = path.join(root, 'SherPay-mobile.html');
+fs.writeFileSync(webOut, html);
+console.log('wrote', webOut, (fs.statSync(webOut).size / 1024).toFixed(0) + ' KB');
