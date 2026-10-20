@@ -159,7 +159,6 @@ export function nextStatus(current, observed, now, expiresAt) {
   if (obs === 'failed') return 'failed';
   const expires = expiresAt || (current && typeof current === 'object' ? current.expires_at : '');
   if (expires && at.getTime() > new Date(expires).getTime()) return 'expired';
-  if (obs === 'awaiting' || obs === 'pending') return 'awaiting_approval';
   return ACTIVE.indexOf(current) > -1 ? current : 'created';
 }
 

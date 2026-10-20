@@ -285,11 +285,6 @@ async function handleInit(admin: ReturnType<typeof createClient>, body: any, ori
     await admin.from('payments').update({ status: 'failed', last_error: why, updated_at: nowIso() }).eq('reference', row.ref);
     return json({ ok: false, error: 'The payment provider refused the request: ' + why, ref: row.ref }, 502);
   }
-  const { error: pendingError } = await admin.from('payments')
-    .update({ status: 'pending', checkout_url: tx.authorization_url, provider_tx_id: String(tx.id || ''), updated_at: nowIso() })
-    .eq('reference', row.ref);
-  if (pendingError) throw new Error('Paystack initialized the transaction, but its checkout could not be saved. Keep reference ' + row.ref + '.');
-
   /* Mobile money completes on Paystack's hosted checkout page — the customer
      taps Pay, Paystack fires `charge.success`, this function verifies against
      Paystack and settles the order. A charge-through-the-wallet (`identify` /
@@ -297,8 +292,7 @@ async function handleInit(admin: ReturnType<typeof createClient>, body: any, ori
      purchase, so that path is removed. `transaction/initialize` returns the
      hosted URL as the fallback for wallets or accounts that cannot be matched. */
   const { error: pendingError } = await admin.from('payments')
-    .update({ status: 'pending', checkout_url: tx.authorization_url,
-      provider_tx_id: String(tx.id || ''), updated_at: nowIso() })
+    .update({ status: 'pending', checkout_url: tx.authorization_url, provider_tx_id: String(tx.id || ''), updated_at: nowIso() })
     .eq('reference', row.ref);
   if (pendingError) throw new Error('Paystack initialized the transaction, but its checkout could not be saved. Keep reference ' + row.ref + '.');
 

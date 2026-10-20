@@ -285,44 +285,18 @@ async function handleInit(admin: ReturnType<typeof createClient>, body: any, ori
     await admin.from('payments').update({ status: 'failed', last_error: why, updated_at: nowIso() }).eq('reference', row.ref);
     return json({ ok: false, error: 'The payment provider refused the request: ' + why, ref: row.ref }, 502);
   }
+  /* Mobile money completes on Paystack's hosted checkout page — the customer
+     taps Pay, Paystack fires `charge.success`, this function verifies against
+     Paystack and settles the order. A charge-through-the-wallet (`identify` /
+     `customer-authorize`) is a card-3DS step that never fires for a wallet
+     purchase, so that path is removed. `transaction/initialize` returns the
+     hosted URL as the fallback for wallets or accounts that cannot be matched. */
   const { error: pendingError } = await admin.from('payments')
     .update({ status: 'pending', checkout_url: tx.authorization_url, provider_tx_id: String(tx.id || ''), updated_at: nowIso() })
     .eq('reference', row.ref);
   if (pendingError) throw new Error('Paystack initialized the transaction, but its checkout could not be saved. Keep reference ' + row.ref + '.');
 
-  /* Push the charge into the wallet the customer just typed: identify their
-     mobile money identity, then authorize the transaction against it. If either
-     step is refused (some wallets need the hosted page or an OTP), the order
-     does not fail — we hand back the hosted link, same wallet, one tap deeper. */
-  const prov = providerById(row.momo_provider);
-  const code = tx.authorization_code || tx.access_code || '';
-  let pushError = '';
-  if (prov && code) {
-    const ident: any = await paystack('/transaction/identify', {
-      email: row.email,
-      authorization_code: code,
-      identity: { type: 'mobile_money', mobile_money: { provider: prov.paystack, country: 'gh', mobile_number: row.momo_number } },
-    });
-    if (ident?.status && ident?.data?.identity) {
-      const authed: any = await paystack('/transaction/customer-authorize', {
-        email: row.email, authorization_code: code, auth_method: 'mobile_money',
-      });
-      if (authed?.status) {
-        const { error } = await admin.from('payments')
-          .update({ status: 'awaiting_approval', attempts: 1, last_error: null, updated_at: nowIso() })
-          .eq('reference', row.ref);
-        if (error) throw new Error('The Mobile Money prompt started, but its status could not be saved. Keep reference ' + row.ref + '.');
-        row = { ...row, status: 'awaiting_approval', last_error: null };
-      } else pushError = authed?.message || 'the wallet did not accept the prompt';
-    } else pushError = ident?.message || 'that number could not be matched to a wallet';
-  } else pushError = 'mobile money prompt could not be started';
-
-  if (pushError) {
-    const { error } = await admin.from('payments').update({ status: 'pending', last_error: pushError, updated_at: nowIso() }).eq('reference', row.ref);
-    if (error) throw new Error('Could not save the Mobile Money fallback status. Keep reference ' + row.ref + '.');
-    row = { ...row, status: 'pending', last_error: pushError };
-  }
-  return json({ ok: true, hint: issued.hint || '', order: publicOrder({ ...row, checkout_url: tx.authorization_url }) });
+  return json({ ok: true, hint: '', order: publicOrder({ ...row, status: 'pending', checkout_url: tx.authorization_url }) });
 }
 
 /* ---------------- POST { action:'status', ref } ---------------- */
